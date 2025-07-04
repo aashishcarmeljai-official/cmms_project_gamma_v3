@@ -356,12 +356,20 @@
                                     <input class="form-check-input" type="checkbox" name="permissions" value="equipment_delete" id="equipment_delete">
                                     <label class="form-check-label" for="equipment_delete">Delete Equipment</label>
                                 </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="equipment_manage" id="equipment_manage">
+                                    <label class="form-check-label" for="equipment_manage">Full Equipment Management</label>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <h6>Work Order Management</h6>
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="permissions" value="workorder_view" id="workorder_view">
-                                    <label class="form-check-label" for="workorder_view">View Work Orders</label>
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="workorder_view_all" id="workorder_view_all">
+                                    <label class="form-check-label" for="workorder_view_all">View All Work Orders</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="workorder_view_assigned_only" id="workorder_view_assigned_only">
+                                    <label class="form-check-label" for="workorder_view_assigned_only">View Assigned/Team Work Orders</label>
                                 </div>
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" name="permissions" value="workorder_create" id="workorder_create">
@@ -374,6 +382,18 @@
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" name="permissions" value="workorder_delete" id="workorder_delete">
                                     <label class="form-check-label" for="workorder_delete">Delete Work Orders</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="workorder_manage" id="workorder_manage">
+                                    <label class="form-check-label" for="workorder_manage">Full Work Order Management</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="bulk_assign" id="bulk_assign">
+                                    <label class="form-check-label" for="bulk_assign">Bulk Assign Work Orders</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="bulk_status_update" id="bulk_status_update">
+                                    <label class="form-check-label" for="bulk_status_update">Bulk Status Update</label>
                                 </div>
                             </div>
                         </div>
@@ -396,6 +416,142 @@
                                     <input class="form-check-input" type="checkbox" name="permissions" value="user_delete" id="user_delete">
                                     <label class="form-check-label" for="user_delete">Delete Users</label>
                                 </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="user_manage" id="user_manage">
+                                    <label class="form-check-label" for="user_manage">Full User Management</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Role & Permission Management</h6>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="role_view" id="role_view">
+                                    <label class="form-check-label" for="role_view">View Roles</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="role_create" id="role_create">
+                                    <label class="form-check-label" for="role_create">Create Roles</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="role_edit" id="role_edit">
+                                    <label class="form-check-label" for="role_edit">Edit Roles</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="role_delete" id="role_delete">
+                                    <label class="form-check-label" for="role_delete">Delete Roles</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="role_manage" id="role_manage">
+                                    <label class="form-check-label" for="role_manage">Full Role Management</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <h6>Team Management</h6>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="team_view" id="team_view">
+                                    <label class="form-check-label" for="team_view">View Teams</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="team_create" id="team_create">
+                                    <label class="form-check-label" for="team_create">Create Teams</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="team_edit" id="team_edit">
+                                    <label class="form-check-label" for="team_edit">Edit Teams</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="team_delete" id="team_delete">
+                                    <label class="form-check-label" for="team_delete">Delete Teams</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="team_manage" id="team_manage">
+                                    <label class="form-check-label" for="team_manage">Full Team Management</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Inventory Management</h6>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="inventory_view" id="inventory_view">
+                                    <label class="form-check-label" for="inventory_view">View Inventory</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="inventory_create" id="inventory_create">
+                                    <label class="form-check-label" for="inventory_create">Create Inventory</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="inventory_edit" id="inventory_edit">
+                                    <label class="form-check-label" for="inventory_edit">Edit Inventory</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="inventory_delete" id="inventory_delete">
+                                    <label class="form-check-label" for="inventory_delete">Delete Inventory</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="inventory_manage" id="inventory_manage">
+                                    <label class="form-check-label" for="inventory_manage">Full Inventory Management</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <h6>Location Management</h6>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="location_view" id="location_view">
+                                    <label class="form-check-label" for="location_view">View Locations</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="location_create" id="location_create">
+                                    <label class="form-check-label" for="location_create">Create Locations</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="location_edit" id="location_edit">
+                                    <label class="form-check-label" for="location_edit">Edit Locations</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="location_delete" id="location_delete">
+                                    <label class="form-check-label" for="location_delete">Delete Locations</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="location_manage" id="location_manage">
+                                    <label class="form-check-label" for="location_manage">Full Location Management</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>SOP Management</h6>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="sop_view" id="sop_view">
+                                    <label class="form-check-label" for="sop_view">View SOPs</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="sop_create" id="sop_create">
+                                    <label class="form-check-label" for="sop_create">Create SOPs</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="sop_edit" id="sop_edit">
+                                    <label class="form-check-label" for="sop_edit">Edit SOPs</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="sop_delete" id="sop_delete">
+                                    <label class="form-check-label" for="sop_delete">Delete SOPs</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="sop_manage" id="sop_manage">
+                                    <label class="form-check-label" for="sop_manage">Full SOP Management</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <h6>Reporting & Analytics</h6>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="reports_access" id="reports_access">
+                                    <label class="form-check-label" for="reports_access">Access Reports & Analytics</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="reports_export" id="reports_export">
+                                    <label class="form-check-label" for="reports_export">Export Reports/Data</label>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <h6>System Administration</h6>
@@ -404,16 +560,24 @@
                                     <label class="form-check-label" for="admin_dashboard">Admin Dashboard</label>
                                 </div>
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="permissions" value="role_manage" id="role_manage">
-                                    <label class="form-check-label" for="role_manage">Manage Roles</label>
-                                </div>
-                                <div class="form-check">
                                     <input class="form-check-input" type="checkbox" name="permissions" value="system_settings" id="system_settings">
                                     <label class="form-check-label" for="system_settings">System Settings</label>
                                 </div>
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="permissions" value="reports_access" id="reports_access">
-                                    <label class="form-check-label" for="reports_access">Access Reports</label>
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="maintenance_mode" id="maintenance_mode">
+                                    <label class="form-check-label" for="maintenance_mode">Enable Maintenance Mode</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="backup_restore" id="backup_restore">
+                                    <label class="form-check-label" for="backup_restore">Backup & Restore</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="notification_manage" id="notification_manage">
+                                    <label class="form-check-label" for="notification_manage">Manage Notifications</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissions" value="whatsapp_manage" id="whatsapp_manage">
+                                    <label class="form-check-label" for="whatsapp_manage">Manage WhatsApp Integration</label>
                                 </div>
                             </div>
                         </div>
@@ -647,19 +811,29 @@ function editRole(roleId) {
 function loadPermissionsToEdit(selectedPermissions) {
     const container = document.getElementById('editPermissionsContainer');
     const allPermissions = [
-        'equipment_view', 'equipment_create', 'equipment_edit', 'equipment_delete',
-        'workorder_view', 'workorder_create', 'workorder_edit', 'workorder_delete',
-        'user_view', 'user_create', 'user_edit', 'user_delete',
-        'admin_dashboard', 'role_manage', 'system_settings', 'reports_access'
+        'equipment_view', 'equipment_create', 'equipment_edit', 'equipment_delete', 'equipment_manage',
+        'workorder_view_all', 'workorder_view_assigned_only', 'workorder_create', 'workorder_edit', 'workorder_delete', 'workorder_manage', 'bulk_assign', 'bulk_status_update',
+        'user_view', 'user_create', 'user_edit', 'user_delete', 'user_manage',
+        'role_view', 'role_create', 'role_edit', 'role_delete', 'role_manage',
+        'team_view', 'team_create', 'team_edit', 'team_delete', 'team_manage',
+        'inventory_view', 'inventory_create', 'inventory_edit', 'inventory_delete', 'inventory_manage',
+        'location_view', 'location_create', 'location_edit', 'location_delete', 'location_manage',
+        'sop_view', 'sop_create', 'sop_edit', 'sop_delete', 'sop_manage',
+        'reports_access', 'reports_export',
+        'admin_dashboard', 'system_settings', 'maintenance_mode', 'backup_restore', 'notification_manage', 'whatsapp_manage'
     ];
-    
     const categories = {
-        'Equipment Management': ['equipment_view', 'equipment_create', 'equipment_edit', 'equipment_delete'],
-        'Work Order Management': ['workorder_view', 'workorder_create', 'workorder_edit', 'workorder_delete'],
-        'User Management': ['user_view', 'user_create', 'user_edit', 'user_delete'],
-        'System Administration': ['admin_dashboard', 'role_manage', 'system_settings', 'reports_access']
+        'Equipment Management': ['equipment_view', 'equipment_create', 'equipment_edit', 'equipment_delete', 'equipment_manage'],
+        'Work Order Management': ['workorder_view_all', 'workorder_view_assigned_only', 'workorder_create', 'workorder_edit', 'workorder_delete', 'workorder_manage', 'bulk_assign', 'bulk_status_update'],
+        'User Management': ['user_view', 'user_create', 'user_edit', 'user_delete', 'user_manage'],
+        'Role & Permission Management': ['role_view', 'role_create', 'role_edit', 'role_delete', 'role_manage'],
+        'Team Management': ['team_view', 'team_create', 'team_edit', 'team_delete', 'team_manage'],
+        'Inventory Management': ['inventory_view', 'inventory_create', 'inventory_edit', 'inventory_delete', 'inventory_manage'],
+        'Location Management': ['location_view', 'location_create', 'location_edit', 'location_delete', 'location_manage'],
+        'SOP Management': ['sop_view', 'sop_create', 'sop_edit', 'sop_delete', 'sop_manage'],
+        'Reporting & Analytics': ['reports_access', 'reports_export'],
+        'System Administration': ['admin_dashboard', 'system_settings', 'maintenance_mode', 'backup_restore', 'notification_manage', 'whatsapp_manage']
     };
-    
     let html = '';
     for (const [category, perms] of Object.entries(categories)) {
         html += `<div class="row mb-3"><div class="col-12"><h6>${category}</h6>`;
@@ -668,13 +842,12 @@ function loadPermissionsToEdit(selectedPermissions) {
             html += `
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="permissions" value="${perm}" id="edit_${perm}" ${isChecked}>
-                    <label class="form-check-label" for="edit_${perm}">${perm.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</label>
+                    <label class="form-check-label" for="edit_${perm}">${perm.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</label>
                 </div>
             `;
         });
         html += '</div></div>';
     }
-    
     container.innerHTML = html;
 }
 

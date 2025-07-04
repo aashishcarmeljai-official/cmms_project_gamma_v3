@@ -18,6 +18,11 @@ import base64
 import json
 from multitenancy import filter_by_company, enforce_company_access
 from flask_mail import Mail, Message
+import sqlalchemy
+from flask.cli import with_appcontext
+import click
+from extensions import db
+from sqlalchemy.orm import joinedload
 
 # Load environment variables
 load_dotenv()
@@ -399,7 +404,15 @@ def save_uploaded_file(file, upload_dir, file_type):
 def index():
     """Dashboard page"""
     stats = get_dashboard_stats()
-    recent_work_orders = filter_by_company(WorkOrder.query).order_by(WorkOrder.created_at.desc()).limit(5).all()
+    if user_has_permission(current_user, 'workorder_view_all'):
+        recent_work_orders = filter_by_company(WorkOrder.query).order_by(WorkOrder.created_at.desc()).limit(5).all()
+    elif user_has_permission(current_user, 'workorder_view_assigned_only'):
+        recent_work_orders = filter_by_company(WorkOrder.query).filter(
+            (WorkOrder.assigned_technician_id == current_user.id) |
+            (WorkOrder.assigned_team_id.in_([team.id for team in current_user.teams]))
+        ).order_by(WorkOrder.created_at.desc()).limit(5).all()
+    else:
+        recent_work_orders = []
     upcoming_maintenance = MaintenanceSchedule.query.filter(
         MaintenanceSchedule.next_due >= datetime.now(),
         MaintenanceSchedule.is_active == True
@@ -419,14 +432,16 @@ def health():
 @app.route('/equipment')
 @login_required
 def equipment_list():
-    """List all equipment for the current company"""
+    if not user_has_permission(current_user, 'equipment_view'):
+        abort(403)
     equipment = filter_by_company(Equipment.query).all()
     return render_template('equipment/list.html', equipment=equipment)
 
 @app.route('/equipment/new', methods=['GET', 'POST'])
 @login_required
 def equipment_new():
-    """Create new equipment"""
+    if not user_has_permission(current_user, 'equipment_create'):
+        abort(403)
     if request.method == 'POST':
         data = request.form
         equipment = Equipment(
@@ -441,23 +456,23 @@ def equipment_new():
             criticality=data.get('criticality', 'medium'),
             description=data.get('description'),
             specifications=data.get('specifications'),
-            company_id=current_user.company_id  # Ensure multi-tenancy
+            company_id=current_user.company_id
         )
         db.session.add(equipment)
         db.session.commit()
         flash('Equipment created successfully!', 'success')
         return redirect(url_for('equipment_list'))
-    
     return render_template('equipment/new.html')
 
 @app.route('/equipment/<int:id>')
 @login_required
 def equipment_detail(id):
-    """Equipment detail page"""
+    if not user_has_permission(current_user, 'equipment_view'):
+        abort(403)
     equipment = Equipment.query.get_or_404(id)
     work_orders = filter_by_company(WorkOrder.query).filter_by(equipment_id=id).order_by(WorkOrder.created_at.desc()).all()
     maintenance_schedules = MaintenanceSchedule.query.filter_by(equipment_id=id).all()
-    today = datetime.now()  # Use datetime instead of date for comparison
+    today = datetime.now()
     return render_template('equipment/detail.html', 
                          equipment=equipment, 
                          work_orders=work_orders,
@@ -467,39 +482,26 @@ def equipment_detail(id):
 @app.route('/equipment/<int:id>/delete', methods=['POST'])
 @login_required
 def equipment_delete(id):
-    """Delete equipment"""
+    if not user_has_permission(current_user, 'equipment_delete'):
+        abort(403)
     equipment = Equipment.query.get_or_404(id)
-    
     try:
-        # Check if equipment has associated work orders
         work_orders = filter_by_company(WorkOrder.query).filter_by(equipment_id=id).all()
-        
-        # Check if equipment has maintenance schedules
         maintenance_schedules = MaintenanceSchedule.query.filter_by(equipment_id=id).all()
-        
-        # Delete associated work order parts first
         for work_order in work_orders:
             work_order_parts = WorkOrderPart.query.filter_by(work_order_id=work_order.id).all()
             for part in work_order_parts:
                 db.session.delete(part)
-        
-        # Delete work orders
         for work_order in work_orders:
             db.session.delete(work_order)
-        
-        # Delete maintenance schedules
         for schedule in maintenance_schedules:
             db.session.delete(schedule)
-        
-        # Delete the equipment
         db.session.delete(equipment)
         db.session.commit()
-        
         flash(f'Equipment "{equipment.name}" deleted successfully!', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting equipment: {str(e)}', 'error')
-    
     return redirect(url_for('equipment_list'))
 
 # Work Order routes
@@ -514,6 +516,15 @@ def work_orders_list():
         query = query.filter_by(status=status_filter)
     if priority_filter:
         query = query.filter_by(priority=priority_filter)
+    if user_has_permission(current_user, 'workorder_view_all'):
+        pass  # No extra filter
+    elif user_has_permission(current_user, 'workorder_view_assigned_only'):
+        query = query.filter(
+            (WorkOrder.assigned_technician_id == current_user.id) |
+            (WorkOrder.assigned_team_id.in_([team.id for team in current_user.teams]))
+        )
+    else:
+        query = query.filter(sqlalchemy.sql.false())  # No access
     work_orders = query.order_by(WorkOrder.created_at.desc()).all()
     return render_template('work_orders/list.html', work_orders=work_orders)
 
@@ -528,8 +539,9 @@ def work_order_new():
         images = []
         if 'images' in request.files:
             uploaded_files = request.files.getlist('images')
+            static_folder = app.static_folder or ''
             for file in uploaded_files:
-                file_path = save_uploaded_file(file, os.path.join(app.static_folder, 'uploads', 'work_orders'), 'image')
+                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'image')
                 if file_path:
                     images.append(file_path)
         
@@ -537,8 +549,9 @@ def work_order_new():
         videos = []
         if 'videos' in request.files:
             uploaded_files = request.files.getlist('videos')
+            static_folder = app.static_folder or ''
             for file in uploaded_files:
-                file_path = save_uploaded_file(file, os.path.join(app.static_folder, 'uploads', 'work_orders'), 'video')
+                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'video')
                 if file_path:
                     videos.append(file_path)
         
@@ -546,8 +559,9 @@ def work_order_new():
         voice_notes = []
         if 'voice_notes' in request.files:
             uploaded_files = request.files.getlist('voice_notes')
+            static_folder = app.static_folder or ''
             for file in uploaded_files:
-                file_path = save_uploaded_file(file, os.path.join(app.static_folder, 'uploads', 'work_orders'), 'audio')
+                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'audio')
                 if file_path:
                     voice_notes.append(file_path)
         
@@ -585,6 +599,8 @@ def work_order_detail(id):
     """Work order detail page"""
     work_order = WorkOrder.query.get_or_404(id)
     enforce_company_access(work_order)
+    if not user_can_access_work_order(work_order, current_user):
+        abort(403)
     return render_template('work_orders/detail.html', work_order=work_order)
 
 @app.route('/work-orders/<int:id>/update-status', methods=['POST'])
@@ -621,8 +637,9 @@ def work_order_add_comment(id):
         images = []
         if 'images' in request.files:
             uploaded_files = request.files.getlist('images')
+            static_folder = app.static_folder or ''
             for file in uploaded_files:
-                file_path = save_uploaded_file(file, os.path.join(app.static_folder, 'uploads', 'comments'), 'image')
+                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'comments'), 'image')
                 if file_path:
                     images.append(file_path)
         
@@ -630,8 +647,9 @@ def work_order_add_comment(id):
         videos = []
         if 'videos' in request.files:
             uploaded_files = request.files.getlist('videos')
+            static_folder = app.static_folder or ''
             for file in uploaded_files:
-                file_path = save_uploaded_file(file, os.path.join(app.static_folder, 'uploads', 'comments'), 'video')
+                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'comments'), 'video')
                 if file_path:
                     videos.append(file_path)
         
@@ -639,8 +657,9 @@ def work_order_add_comment(id):
         voice_notes = []
         if 'voice_notes' in request.files:
             uploaded_files = request.files.getlist('voice_notes')
+            static_folder = app.static_folder or ''
             for file in uploaded_files:
-                file_path = save_uploaded_file(file, os.path.join(app.static_folder, 'uploads', 'comments'), 'audio')
+                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'comments'), 'audio')
                 if file_path:
                     voice_notes.append(file_path)
         
@@ -704,25 +723,16 @@ def add_checklist_notes(work_order_id, checklist_item_id):
 @app.route('/inventory')
 @login_required
 def inventory_list():
-    """List all inventory items"""
-    search_query = request.args.get('search', '').strip()
-    query = filter_by_company(Inventory.query)
-    if search_query:
-        query = query.filter(
-            db.or_(
-                Inventory.part_number.ilike(f'%{search_query}%'),
-                Inventory.name.ilike(f'%{search_query}%'),
-                Inventory.category.ilike(f'%{search_query}%'),
-                Inventory.location.ilike(f'%{search_query}%')
-            )
-        )
-    inventory = query.all()
+    if not user_has_permission(current_user, 'inventory_view'):
+        abort(403)
+    inventory = filter_by_company(Inventory.query).all()
     return render_template('inventory/list.html', inventory=inventory)
 
 @app.route('/inventory/new', methods=['GET', 'POST'])
 @login_required
 def inventory_new():
-    """Create new inventory item"""
+    if not user_has_permission(current_user, 'inventory_create'):
+        abort(403)
     if request.method == 'POST':
         data = request.form
         inventory = Inventory(
@@ -752,6 +762,8 @@ def inventory_new():
 @app.route('/inventory/<int:id>')
 @login_required
 def inventory_detail(id):
+    if not user_has_permission(current_user, 'inventory_view'):
+        abort(403)
     """Inventory item detail page"""
     inventory = Inventory.query.get_or_404(id)
     enforce_company_access(inventory)
@@ -760,6 +772,8 @@ def inventory_detail(id):
 @app.route('/inventory/<int:id>/delete', methods=['POST'])
 @login_required
 def inventory_delete(id):
+    if not user_has_permission(current_user, 'inventory_delete'):
+        abort(403)
     """Delete inventory item"""
     inventory = Inventory.query.get_or_404(id)
     enforce_company_access(inventory)
@@ -771,6 +785,8 @@ def inventory_delete(id):
 @app.route('/inventory/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def inventory_edit(id):
+    if not user_has_permission(current_user, 'inventory_edit'):
+        abort(403)
     inventory = Inventory.query.get_or_404(id)
     enforce_company_access(inventory)
     form = InventoryForm(obj=inventory)
@@ -1022,7 +1038,7 @@ login_manager.login_view = "login"
 # User loader for Flask-Login
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return User.query.options(joinedload(User.role_info)).get(int(user_id))
 
 # Flask-WTF Forms
 class LoginForm(FlaskForm):
@@ -1282,10 +1298,12 @@ def signup():
                 last_name=form.last_name.data,
                 company_id=company_id
             )
-            
             # Set admin role for the first user of a new organization
             if form.organization_type.data == 'new_org':
                 user.role = 'admin'
+                admin_role = Role.query.filter_by(company_id=company_id, name='admin').first()
+                if admin_role:
+                    user.role_id = admin_role.id
             
             user.set_password(form.password.data)
             db.session.add(user)
@@ -1343,12 +1361,21 @@ def login_google():
     info = resp.json()
     user = User.query.filter_by(email=info['email']).first()
     if not user:
+        # Try to infer company from email domain, or assign to a default company if needed
+        # For now, assign to the first company (or you can improve this logic)
+        company = Company.query.first()
+        technician_role = None
+        if company:
+            technician_role = Role.query.filter_by(company_id=company.id, name='technician').first()
         user = User(
             username=info.get('email').split('@')[0],
             email=info.get('email'),
             first_name=info.get('given_name', ''),
             last_name=info.get('family_name', ''),
-            google_id=info.get('id')
+            google_id=info.get('id'),
+            company_id=company.id if company else None,
+            role='technician',
+            role_id=technician_role.id if technician_role else None
         )
         db.session.add(user)
         db.session.commit()
@@ -1457,25 +1484,16 @@ def delete_account():
 @app.route('/locations')
 @login_required
 def locations_list():
-    """List all locations"""
-    search_query = request.args.get('search', '').strip()
-    query = filter_by_company(Location.query)
-    if search_query:
-        query = query.filter(
-            db.or_(
-                Location.name.ilike(f'%{search_query}%'),
-                Location.city.ilike(f'%{search_query}%'),
-                Location.state.ilike(f'%{search_query}%'),
-                Location.contact_person.ilike(f'%{search_query}%')
-            )
-        )
-    locations = query.all()
+    if not user_has_permission(current_user, 'location_view'):
+        abort(403)
+    locations = filter_by_company(Location.query).all()
     return render_template('locations/list.html', locations=locations)
 
 @app.route('/locations/new', methods=['GET', 'POST'])
 @login_required
 def location_new():
-    """Create new location"""
+    if not user_has_permission(current_user, 'location_create'):
+        abort(403)
     form = LocationForm()
     
     if form.validate_on_submit():
@@ -1504,6 +1522,8 @@ def location_new():
 @app.route('/locations/<int:id>')
 @login_required
 def location_detail(id):
+    if not user_has_permission(current_user, 'location_view'):
+        abort(403)
     """Location detail page"""
     location = Location.query.get_or_404(id)
     enforce_company_access(location)
@@ -1512,7 +1532,8 @@ def location_detail(id):
 @app.route('/locations/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def location_edit(id):
-    """Edit location"""
+    if not user_has_permission(current_user, 'location_edit'):
+        abort(403)
     location = Location.query.get_or_404(id)
     enforce_company_access(location)
     form = LocationForm(obj=location)
@@ -1540,6 +1561,8 @@ def location_edit(id):
 @app.route('/locations/<int:id>/delete', methods=['POST'])
 @login_required
 def location_delete(id):
+    if not user_has_permission(current_user, 'location_delete'):
+        abort(403)
     """Delete location"""
     location = Location.query.get_or_404(id)
     enforce_company_access(location)
@@ -1622,6 +1645,8 @@ def maintenance_schedule_delete(id, schedule_id):
 @app.route('/teams', methods=['GET', 'POST'])
 @login_required
 def teams():
+    if not user_has_permission(current_user, 'team_view'):
+        abort(403)
     users = filter_by_company(User.query).order_by(User.first_name, User.last_name).all()
     teams = filter_by_company(Team.query).order_by(Team.name).all()
     search_user = request.args.get('search_user', '').strip().lower()
@@ -1633,6 +1658,8 @@ def teams():
 @app.route('/teams/create', methods=['GET', 'POST'])
 @login_required
 def create_team():
+    if not user_has_permission(current_user, 'team_create'):
+        abort(403)
     form = TeamForm()
     form.members.choices = [(u.id, f"{u.first_name} {u.last_name} ({u.username})") for u in User.query.order_by(User.first_name, User.last_name).all()]
     if form.validate_on_submit():
@@ -1647,6 +1674,8 @@ def create_team():
 @app.route('/teams/<int:team_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_team(team_id):
+    if not user_has_permission(current_user, 'team_edit'):
+        abort(403)
     team = Team.query.get_or_404(team_id)
     enforce_company_access(team)
     form = TeamForm(obj=team)
@@ -1665,6 +1694,8 @@ def edit_team(team_id):
 @app.route('/teams/<int:team_id>/delete', methods=['POST'])
 @login_required
 def delete_team(team_id):
+    if not user_has_permission(current_user, 'team_delete'):
+        abort(403)
     team = Team.query.get_or_404(team_id)
     enforce_company_access(team)
     db.session.delete(team)
@@ -1675,6 +1706,8 @@ def delete_team(team_id):
 @app.route('/teams/<int:team_id>/add_member', methods=['POST'])
 @login_required
 def add_member_to_team(team_id):
+    if not user_has_permission(current_user, 'team_manage'):
+        abort(403)
     team = Team.query.get_or_404(team_id)
     user_id = int(request.form.get('user_id'))
     user = User.query.get(user_id)
@@ -1682,11 +1715,13 @@ def add_member_to_team(team_id):
         team.members.append(user)
         db.session.commit()
         flash('User added to team!', 'success')
-    return redirect(url_for('teams'))
+    return redirect(url_for('edit_team', team_id=team_id))
 
 @app.route('/teams/<int:team_id>/remove_member', methods=['POST'])
 @login_required
 def remove_member_from_team(team_id):
+    if not user_has_permission(current_user, 'team_manage'):
+        abort(403)
     team = Team.query.get_or_404(team_id)
     user_id = int(request.form.get('user_id'))
     user = User.query.get(user_id)
@@ -1694,11 +1729,13 @@ def remove_member_from_team(team_id):
         team.members.remove(user)
         db.session.commit()
         flash('User removed from team!', 'success')
-    return redirect(url_for('teams'))
+    return redirect(url_for('edit_team', team_id=team_id))
 
 @app.route('/teams/invite', methods=['GET', 'POST'])
 @login_required
 def team_invite():
+    if not user_has_permission(current_user, 'team_manage'):
+        abort(403)
     if current_user.role not in ['admin', 'manager']:
         flash('Access denied.', 'error')
         return redirect(url_for('teams'))
@@ -1767,6 +1804,8 @@ Gamma Project Product Team
 @app.route('/sops')
 @login_required
 def sops_list():
+    if not user_has_permission(current_user, 'sop_view'):
+        abort(403)
     """List all SOPs"""
     search = request.args.get('search', '').strip()
     category_filter = request.args.get('category', '').strip()
@@ -1788,6 +1827,8 @@ def sops_list():
 @app.route('/sops/new', methods=['GET', 'POST'])
 @login_required
 def sop_new():
+    if not user_has_permission(current_user, 'sop_create'):
+        abort(403)
     """Create new SOP"""
     form = SOPForm()
     form.equipment_id.choices = [(0, '-- Select Equipment --')] + [(e.id, e.name) for e in Equipment.query.order_by(Equipment.name).all()]
@@ -1816,6 +1857,8 @@ def sop_new():
 @app.route('/sops/<int:id>')
 @login_required
 def sop_detail(id):
+    if not user_has_permission(current_user, 'sop_view'):
+        abort(403)
     """View SOP details"""
     sop = SOP.query.get_or_404(id)
     return render_template('sops/detail.html', sop=sop)
@@ -1823,6 +1866,8 @@ def sop_detail(id):
 @app.route('/sops/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def sop_edit(id):
+    if not user_has_permission(current_user, 'sop_edit'):
+        abort(403)
     """Edit SOP"""
     sop = SOP.query.get_or_404(id)
     enforce_company_access(sop)
@@ -1849,6 +1894,8 @@ def sop_edit(id):
 @app.route('/sops/<int:id>/delete', methods=['POST'])
 @login_required
 def sop_delete(id):
+    if not user_has_permission(current_user, 'sop_delete'):
+        abort(403)
     """Delete SOP"""
     sop = SOP.query.get_or_404(id)
     enforce_company_access(sop)
@@ -1860,6 +1907,8 @@ def sop_delete(id):
 @app.route('/sops/<int:id>/add-checklist-item', methods=['POST'])
 @login_required
 def sop_add_checklist_item(id):
+    if not user_has_permission(current_user, 'sop_manage'):
+        abort(403)
     """Add checklist item to SOP"""
     sop = SOP.query.get_or_404(id)
     description = request.form.get('description', '').strip()
@@ -1885,6 +1934,8 @@ def sop_add_checklist_item(id):
 @app.route('/sops/<int:id>/delete-checklist-item/<int:item_id>', methods=['POST'])
 @login_required
 def sop_delete_checklist_item(id, item_id):
+    if not user_has_permission(current_user, 'sop_manage'):
+        abort(403)
     """Delete checklist item from SOP"""
     item = SOPChecklistItem.query.get_or_404(item_id)
     if item.sop_id != id:
@@ -3085,9 +3136,8 @@ def admin_analytics():
 @app.route('/admin/users')
 @login_required
 def admin_users():
-    if current_user.role not in ['admin', 'manager']:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('index'))
+    if not user_has_permission(current_user, 'user_view'):
+        abort(403)
     users = filter_by_company(User.query).all()
     roles = [r.name for r in filter_by_company(Role.query).filter_by(is_active=True).all()]
     departments = [d.name for d in Department.query.filter_by(company_id=current_user.company_id, is_active=True).all()]
@@ -3096,6 +3146,8 @@ def admin_users():
 @app.route('/admin/users/create', methods=['POST'])
 @login_required
 def admin_create_user():
+    if not user_has_permission(current_user, 'user_create'):
+        abort(403)
     """Create new user from admin panel"""
     # Check if user has admin privileges
     if current_user.role not in ['admin', 'manager']:
@@ -3126,6 +3178,7 @@ def admin_create_user():
         first_name=data['first_name'],
         last_name=data['last_name'],
         role=data['role'],
+        role_id=role.id,  # <-- set role_id for permission system
         department=data.get('department'),
         phone=data.get('phone'),
         is_active=data.get('is_active') == 'on'
@@ -3141,6 +3194,8 @@ def admin_create_user():
 @app.route('/admin/users/<int:user_id>')
 @login_required
 def admin_get_user(user_id):
+    if not user_has_permission(current_user, 'user_view'):
+        abort(403)
     """Get user data for editing"""
     # Check if user has admin privileges
     if current_user.role not in ['admin', 'manager']:
@@ -3170,6 +3225,8 @@ def admin_get_user(user_id):
 @app.route('/admin/users/<int:user_id>/update', methods=['POST'])
 @login_required
 def admin_update_user(user_id):
+    if not user_has_permission(current_user, 'user_edit'):
+        abort(403)
     """Update user from admin panel"""
     # Check if user has admin privileges
     if current_user.role not in ['admin', 'manager']:
@@ -3199,11 +3256,13 @@ def admin_update_user(user_id):
     db.session.commit()
     
     flash(f'User {user.first_name} {user.last_name} updated successfully.', 'success')
-    return redirect(url_for('admin_users'))
+    return redirect(url_for('admin_get_user', user_id=user_id))
 
 @app.route('/admin/users/<int:user_id>/toggle-status', methods=['POST'])
 @login_required
 def admin_toggle_user_status(user_id):
+    if not user_has_permission(current_user, 'user_manage'):
+        abort(403)
     """Toggle user active status"""
     # Check if user has admin privileges
     if current_user.role not in ['admin', 'manager']:
@@ -3224,6 +3283,8 @@ def admin_toggle_user_status(user_id):
 @app.route('/admin/users/<int:user_id>/reset-password', methods=['POST'])
 @login_required
 def admin_reset_user_password(user_id):
+    if not user_has_permission(current_user, 'user_manage'):
+        abort(403)
     """Reset user password"""
     # Check if user has admin privileges
     if current_user.role not in ['admin', 'manager']:
@@ -3246,6 +3307,8 @@ def admin_reset_user_password(user_id):
 @app.route('/admin/users/<int:user_id>/change-role', methods=['POST'])
 @login_required
 def admin_change_user_role(user_id):
+    if not user_has_permission(current_user, 'user_manage'):
+        abort(403)
     """Change user role"""
     if current_user.role != 'admin':
         return jsonify({'success': False, 'message': 'Access denied'})
@@ -3281,6 +3344,8 @@ def admin_change_user_role(user_id):
 @app.route('/admin/roles')
 @login_required
 def admin_roles():
+    if not user_has_permission(current_user, 'role_view'):
+        abort(403)
     """Admin role management"""
     # Check if user has admin privileges
     if current_user.role not in ['admin', 'manager']:
@@ -3304,6 +3369,8 @@ def admin_roles():
 @app.route('/admin/roles/create', methods=['POST'])
 @login_required
 def admin_create_role():
+    if not user_has_permission(current_user, 'role_create'):
+        abort(403)
     """Create a new role"""
     # Check if user has admin privileges
     if current_user.role not in ['admin']:
@@ -3350,6 +3417,8 @@ def admin_create_role():
 @app.route('/admin/roles/<int:role_id>')
 @login_required
 def admin_get_role(role_id):
+    if not user_has_permission(current_user, 'role_view'):
+        abort(403)
     """Get role details"""
     # Check if user has admin privileges
     if current_user.role not in ['admin', 'manager']:
@@ -3367,6 +3436,8 @@ def admin_get_role(role_id):
 @app.route('/admin/roles/<int:role_id>/update', methods=['POST'])
 @login_required
 def admin_update_role(role_id):
+    if not user_has_permission(current_user, 'role_edit'):
+        abort(403)
     """Update a role"""
     # Check if user has admin privileges
     if current_user.role not in ['admin']:
@@ -3412,16 +3483,18 @@ def admin_update_role(role_id):
         db.session.commit()
         
         flash(f'Role "{display_name}" updated successfully.', 'success')
-        return redirect(url_for('admin_roles'))
+        return redirect(url_for('admin_get_role', role_id=role_id))
         
     except Exception as e:
         db.session.rollback()
         flash(f'Error updating role: {str(e)}', 'error')
-        return redirect(url_for('admin_roles'))
+        return redirect(url_for('admin_get_role', role_id=role_id))
 
 @app.route('/admin/roles/<int:role_id>/delete', methods=['POST'])
 @login_required
 def admin_delete_role(role_id):
+    if not user_has_permission(current_user, 'role_delete'):
+        abort(403)
     """Delete a role"""
     # Check if user has admin privileges
     if current_user.role not in ['admin']:
@@ -4960,6 +5033,41 @@ def send_email(subject, recipients, body, html=None):
     msg = Message(subject, recipients=recipients, body=body, html=html)
     mail.send(msg)
 
+# Helper function for work order access
+from flask import abort
+
+def user_can_access_work_order(work_order, user):
+    if user.role in ['admin', 'manager']:
+        return True
+    return (
+        work_order.assigned_technician_id == user.id or
+        (work_order.assigned_team_id is not None and work_order.assigned_team_id in [team.id for team in user.teams])
+    )
+
+def user_has_permission(user, permission):
+    print(f"[DEBUG] user_has_permission: user.id={getattr(user, 'id', None)}, username={getattr(user, 'username', None)}, role={getattr(user, 'role', None)}, role_id={getattr(user, 'role_id', None)}, role_info={getattr(user, 'role_info', None)}")
+    if hasattr(user, 'role_info') and user.role_info and user.role_info.name == 'admin':
+        print("[DEBUG] Admin detected via role_info. Granting all permissions.")
+        return True
+    if hasattr(user, 'role_info') and user.role_info and user.role_info.permissions:
+        perms = json.loads(user.role_info.permissions)
+        print(f"[DEBUG] Permissions for user: {perms}")
+        return permission in perms
+    print("[DEBUG] No permissions found. Denying access.")
+    return False
+
+@click.command('init-db')
+@with_appcontext
+def init_db_command():
+    """Initialize the database (create all tables)."""
+    db.create_all()
+    click.echo('✅ Database tables created.')
+
+def register_commands(app):
+    app.cli.add_command(init_db_command)
+
+register_commands(app)
+
 if __name__ == '__main__':
     print(os.getenv('MAIL_USE_TLS'))
     import sys
@@ -4974,3 +5082,11 @@ if __name__ == '__main__':
     else:
         print(os.getenv('DATABASE_URL'))
         app.run(debug=True)
+
+@app.errorhandler(403)
+def forbidden_error(error):
+    flash('You do not have permission to access this resource.', 'error')
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    else:
+        return redirect(url_for('login'))
