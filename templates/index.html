@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block title %}Gamma Project - Welcome{% endblock %}
+
+{% block content %}
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h1 class="card-title">Welcome to Flask Web Application</h1>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">This is a basic Flask application with PostgreSQL database integration.</p>
+                        <div class="alert alert-info">
+                            <strong>Status:</strong> <span id="status">Checking...</span>
+                        </div>
+                        <button class="btn btn-primary" onclick="checkHealth()">Check Health</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+{% endblock %} 

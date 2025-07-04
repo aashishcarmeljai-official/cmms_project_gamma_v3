@@ -1,0 +1,894 @@
+{% extends "base.html" %}
+
+{% block title %}Team Management - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid admin-page">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">Team Management</h1>
+            <p class="text-muted">Manage teams and team assignments</p>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createTeamModal">
+                <i class="fas fa-plus me-2"></i>Create Team
+            </button>
+            <button type="button" class="btn btn-outline-info" data-bs-toggle="offcanvas" data-bs-target="#inviteOffcanvas">
+                <i class="fas fa-user-plus me-2"></i>Invite
+            </button>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Admin
+            </a>
+        </div>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-white">Search & Filter</h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <label for="search" class="form-label">Search</label>
+                    <input type="text" class="form-control" id="search" name="search" 
+                           value="{{ request.args.get('search', '') }}" placeholder="Team name or description">
+                </div>
+                <div class="col-md-3">
+                    <label for="department_filter" class="form-label">Department</label>
+                    <select class="form-select" id="department_filter" name="department">
+                        <option value="">All Departments</option>
+                        {% for dept in departments %}
+                            <option value="{{ dept }}">{{ dept }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="status_filter" class="form-label">Status</label>
+                    <select class="form-select" id="status_filter" name="status">
+                        <option value="">All Status</option>
+                        <option value="active" {{ 'selected' if request.args.get('status') == 'active' }}>Active</option>
+                        <option value="inactive" {{ 'selected' if request.args.get('status') == 'inactive' }}>Inactive</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search me-2"></i>Search
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Team Statistics -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Teams
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ teams|length }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-user-friends fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Active Teams
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ teams|selectattr('is_active', 'equalto', True)|list|length }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Total Members
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {% set total_members = 0 %}
+                                {% for team in teams %}
+                                    {% set total_members = total_members + team.members|length %}
+                                {% endfor %}
+                                {{ total_members }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Available Technicians
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ technicians|length }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-user-cog fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Teams Table -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-white">Teams ({{ teams|length }} total)</h6>
+            <div class="btn-group">
+                <button type="button" class="btn btn-outline-success btn-sm" onclick="bulkActivate()">
+                    <i class="fas fa-check me-1"></i>Activate Selected
+                </button>
+                <button type="button" class="btn btn-outline-warning btn-sm" onclick="bulkDeactivate()">
+                    <i class="fas fa-times me-1"></i>Deactivate Selected
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if teams %}
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>
+                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                            </th>
+                            <th>Team</th>
+                            <th>Members</th>
+
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for team in teams %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="team-checkbox" value="{{ team.id }}">
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar me-3">
+                                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                                             style="width: 40px; height: 40px;">
+                                            <i class="fas fa-user-friends"></i>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">{{ team.name }}</div>
+                                        <div class="text-muted">{{ team.description[:50] }}{{ '...' if team.description|length > 50 else '' }}</div>
+                                        <small class="text-muted">ID: {{ team.id }}</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-wrap">
+                                    {% for member in team.members[:3] %}
+                                    <div class="avatar me-1 mb-1">
+                                        <div class="bg-info text-white rounded-circle d-flex align-items-center justify-content-center" 
+                                             style="width: 30px; height: 30px; font-size: 0.8rem;">
+                                            {{ member.first_name[0] if member.first_name else member.username[0] }}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                    {% if team.members|length > 3 %}
+                                    <div class="avatar me-1 mb-1">
+                                        <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                                             style="width: 30px; height: 30px; font-size: 0.8rem;">
+                                            +{{ team.members|length - 3 }}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">{{ team.members|length }} members</small>
+                            </td>
+
+                            <td>
+                                <button type="button" class="btn btn-sm" 
+                                        onclick="toggleTeamStatus({{ team.id }})"
+                                        style="background-color: {{ 'var(--bs-success)' if team.is_active else 'var(--bs-danger)' }}; color: white; border: none;">
+                                    <i class="fas fa-{{ 'check' if team.is_active else 'times' }} me-1"></i>
+                                    {{ 'Active' if team.is_active else 'Inactive' }}
+                                </button>
+                            </td>
+                            <td>
+                                <div>{{ team.created_at.strftime('%Y-%m-%d') if team.created_at else 'N/A' }}</div>
+                                <small class="text-muted">{{ team.created_at.strftime('%H:%M') if team.created_at else '' }}</small>
+                            </td>
+                            <td>
+                                <div class="btn-group-vertical btn-group-sm">
+                                    <button class="btn btn-outline-primary btn-sm" 
+                                            onclick="viewTeam({{ team.id }})" title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-warning btn-sm" 
+                                            onclick="editTeam({{ team.id }})" title="Edit Team">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-outline-info btn-sm" 
+                                            onclick="manageMembers({{ team.id }})" title="Manage Members">
+                                        <i class="fas fa-users"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm" 
+                                            onclick="deleteTeam({{ team.id }})" title="Delete Team">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No teams found</h5>
+                <p class="text-muted">Try adjusting your search criteria or create a new team.</p>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createTeamModal">
+                    <i class="fas fa-plus me-2"></i>Create First Team
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Create Team Modal -->
+<div class="modal fade" id="createTeamModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus me-2"></i>Create New Team
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createTeamForm" method="POST" action="{{ url_for('admin_create_team') }}">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="teamName" class="form-label">Team Name *</label>
+                                <input type="text" class="form-control" id="teamName" name="name" required 
+                                       placeholder="e.g., Maintenance Team A">
+                            </div>
+                        </div>
+
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="teamDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="teamDescription" name="description" rows="3" 
+                                  placeholder="Describe the team's responsibilities and focus areas"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="teamMembers" class="form-label">Add Members</label>
+                        <select class="form-select" id="teamMembers" name="members" multiple>
+                            {% for technician in technicians %}
+                            <option value="{{ technician.id }}">{{ technician.first_name }} {{ technician.last_name }} ({{ technician.role|capitalize }})</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Hold Ctrl/Cmd to select multiple members</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Create Team
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Team Modal -->
+<div class="modal fade" id="editTeamModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit me-2"></i>Edit Team
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editTeamForm" method="POST">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editTeamName" class="form-label">Team Name *</label>
+                                <input type="text" class="form-control" id="editTeamName" name="name" required>
+                            </div>
+                        </div>
+
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="editTeamDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="editTeamDescription" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Update Team
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Manage Members Modal -->
+<div class="modal fade" id="manageMembersModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-users me-2"></i>Manage Team Members
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="membersContent">
+                    <!-- Members management content will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Team Modal -->
+<div class="modal fade" id="viewTeamModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-eye me-2"></i>Team Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="teamDetails">
+                    <!-- Team details will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Team Confirmation Modal -->
+<div class="modal fade" id="deleteTeamModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Delete Team
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this team?</p>
+                <p class="text-muted">This action cannot be undone. Team members will be unassigned.</p>
+                <form id="deleteTeamForm" method="POST">
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="confirmDelete" required>
+                            <label class="form-check-label" for="confirmDelete">
+                                I understand that this action cannot be undone
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="deleteTeamForm" class="btn btn-danger">
+                    <i class="fas fa-trash me-2"></i>Delete Team
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if current_user.is_authenticated and current_user.role in ['admin', 'manager'] %}
+<div class="offcanvas offcanvas-start offcanvas-admin" tabindex="-1" id="inviteOffcanvas" aria-labelledby="inviteOffcanvasLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="inviteOffcanvasLabel"><i class="fas fa-user-plus me-2"></i>Invite to Team</h5>
+        <button type="button" class="btn-close btn-close-white text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-0">
+        <div class="p-3">
+            <label class="form-label fw-bold">Invite Link</label>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" value="{{ url_for('signup', _external=True) }}?company={{ current_user.company_id }}" readonly id="inviteLinkInput">
+                <button class="btn btn-outline-secondary" type="button" onclick="copyInviteLink()">Copy</button>
+            </div>
+            <small class="form-text text-muted">Share this link to invite someone to your company.</small>
+            <hr>
+            <h5>Manual Invitation</h5>
+            <form method="POST" action="{{ url_for('team_invite') }}">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="invite_name" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="invite_name" name="name" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="invite_email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="invite_email" name="email" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="invite_role" class="form-label">Role</label>
+                        <select class="form-select" id="invite_role" name="role" required>
+                            <option value="">Select Role</option>
+                            {% for r in roles %}
+                                <option value="{{ r }}">{{ r|capitalize }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success">Send Invitation</button>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+function copyInviteLink() {
+    var copyText = document.getElementById("inviteLinkInput");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999);
+    document.execCommand("copy");
+}
+</script>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Toggle select all checkboxes
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.team-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+}
+
+// Bulk operations
+function bulkActivate() {
+    const selectedTeams = getSelectedTeams();
+    if (selectedTeams.length === 0) {
+        alert('Please select teams to activate.');
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to activate ${selectedTeams.length} teams?`)) {
+        return;
+    }
+    
+    fetch('/admin/teams/bulk-activate', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ team_ids: selectedTeams })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error activating teams');
+    });
+}
+
+function bulkDeactivate() {
+    const selectedTeams = getSelectedTeams();
+    if (selectedTeams.length === 0) {
+        alert('Please select teams to deactivate.');
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to deactivate ${selectedTeams.length} teams?`)) {
+        return;
+    }
+    
+    fetch('/admin/teams/bulk-deactivate', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ team_ids: selectedTeams })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error deactivating teams');
+    });
+}
+
+function getSelectedTeams() {
+    const checkboxes = document.querySelectorAll('.team-checkbox:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+// Team operations
+function viewTeam(teamId) {
+    // Show loading state
+    document.getElementById('teamDetails').innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i><p>Loading team details...</p></div>';
+    
+    const viewModal = new bootstrap.Modal(document.getElementById('viewTeamModal'));
+    viewModal.show();
+    
+    fetch(`/admin/teams/${teamId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                const team = data.team;
+                
+                document.getElementById('teamDetails').innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Basic Information</h6>
+                            <p><strong>Name:</strong> ${team.name}</p>
+                            <p><strong>Description:</strong> ${team.description || 'No description'}</p>
+                            <p><strong>Status:</strong> <span class="badge ${team.is_active ? 'bg-success' : 'bg-secondary'}">${team.is_active ? 'Active' : 'Inactive'}</span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Members (${team.members.length})</h6>
+                            ${team.members.length > 0 ? team.members.map(member => 
+                                `<div class="d-flex align-items-center mb-2">
+                                    <div class="bg-info text-white rounded-circle d-flex align-items-center justify-content-center me-2" 
+                                         style="width: 30px; height: 30px; font-size: 0.8rem;">
+                                        ${member.first_name ? member.first_name[0] : member.username[0]}
+                                    </div>
+                                    <div>
+                                        <div>${member.first_name} ${member.last_name}</div>
+                                        <small class="text-muted">${member.role.charAt(0).toUpperCase() + member.role.slice(1)}</small>
+                                    </div>
+                                </div>`
+                            ).join('') : '<p class="text-muted">No members assigned</p>'}
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Timestamps</h6>
+                            <p><strong>Created:</strong> ${new Date(team.created_at).toLocaleDateString()}</p>
+                            <p><strong>Updated:</strong> ${new Date(team.updated_at).toLocaleDateString()}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Statistics</h6>
+                            <p><strong>Total Members:</strong> ${team.members.length}</p>
+                            <p><strong>Active Work Orders:</strong> ${team.work_orders ? team.work_orders.length : 0}</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                document.getElementById('teamDetails').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Error loading team details: ${data.message || 'Unknown error'}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('teamDetails').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error loading team details: ${error.message}
+                </div>
+            `;
+        });
+}
+
+function editTeam(teamId) {
+    // Show loading state
+    document.getElementById('editTeamName').value = '';
+    document.getElementById('editTeamDescription').value = '';
+    
+    const editModal = new bootstrap.Modal(document.getElementById('editTeamModal'));
+    editModal.show();
+    
+    fetch(`/admin/teams/${teamId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                const team = data.team;
+                
+                document.getElementById('editTeamForm').action = `/admin/teams/${teamId}/update`;
+                document.getElementById('editTeamName').value = team.name;
+                document.getElementById('editTeamDescription').value = team.description || '';
+            } else {
+                alert('Error loading team details: ' + (data.message || 'Unknown error'));
+                editModal.hide();
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading team details: ' + error.message);
+            editModal.hide();
+        });
+}
+
+function manageMembers(teamId) {
+    fetch(`/admin/teams/${teamId}/members`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const team = data.team;
+                const availableTechnicians = data.available_technicians;
+                
+                document.getElementById('membersContent').innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Current Members</h6>
+                            <div id="currentMembers">
+                                ${team.members.length > 0 ? team.members.map(member => 
+                                    `<div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                                        <div class="d-flex align-items-center">
+                                            <div class="bg-info text-white rounded-circle d-flex align-items-center justify-content-center me-2" 
+                                                 style="width: 30px; height: 30px; font-size: 0.8rem;">
+                                                ${member.first_name ? member.first_name[0] : member.username[0]}
+                                            </div>
+                                            <div>
+                                                <div>${member.first_name} ${member.last_name}</div>
+                                                <small class="text-muted">${member.role.charAt(0).toUpperCase() + member.role.slice(1)}</small>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                onclick="removeMember(${teamId}, ${member.id})">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>`
+                                ).join('') : '<p class="text-muted">No members assigned</p>'}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Add New Members</h6>
+                            <div class="mb-3">
+                                <select class="form-select" id="addMemberSelect">
+                                    <option value="">Select a technician</option>
+                                    ${availableTechnicians.map(tech => 
+                                        `<option value="${tech.id}">${tech.first_name} ${tech.last_name} (${tech.role.charAt(0).toUpperCase() + tech.role.slice(1)})</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="addMember(${teamId})">
+                                <i class="fas fa-plus me-2"></i>Add Member
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                new bootstrap.Modal(document.getElementById('manageMembersModal')).show();
+            } else {
+                alert('Error loading team members');
+            }
+        });
+}
+
+function addMember(teamId) {
+    const memberId = document.getElementById('addMemberSelect').value;
+    if (!memberId) {
+        alert('Please select a member to add.');
+        return;
+    }
+    
+    fetch(`/admin/teams/${teamId}/add_member`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ member_id: memberId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error adding member: ' + data.message);
+        }
+    });
+}
+
+function removeMember(teamId, memberId) {
+    if (!confirm('Are you sure you want to remove this member from the team?')) {
+        return;
+    }
+    
+    fetch(`/admin/teams/${teamId}/remove_member`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ member_id: memberId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error removing member: ' + data.message);
+        }
+    });
+}
+
+function toggleTeamStatus(teamId) {
+    if (!confirm('Are you sure you want to change this team\'s status?')) {
+        return;
+    }
+    
+    fetch(`/admin/teams/${teamId}/toggle-status`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error updating team status');
+    });
+}
+
+function deleteTeam(teamId) {
+    // Set the form action
+    document.getElementById('deleteTeamForm').action = `/admin/teams/${teamId}/delete`;
+    
+    // Reset the confirmation checkbox
+    document.getElementById('confirmDelete').checked = false;
+    
+    // Show the modal
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteTeamModal'));
+    deleteModal.show();
+}
+
+// Handle delete form submission
+document.getElementById('deleteTeamForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const confirmCheckbox = document.getElementById('confirmDelete');
+    if (!confirmCheckbox.checked) {
+        alert('Please confirm that you understand this action cannot be undone.');
+        return;
+    }
+    
+    // Submit the form
+    this.submit();
+});
+
+// Modal cleanup to prevent backdrop issues
+document.addEventListener('DOMContentLoaded', function() {
+    // Clean up modal backdrops when modals are hidden
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        modal.addEventListener('hidden.bs.modal', function() {
+            // Remove any lingering backdrop
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(backdrop => backdrop.remove());
+            
+            // Remove modal-open class from body
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        });
+    });
+    
+    // Handle escape key to properly close modals
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const openModals = document.querySelectorAll('.modal.show');
+            openModals.forEach(modal => {
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+            });
+        }
+    });
+});
+
+// Form validation
+document.getElementById('createTeamForm').addEventListener('submit', function(e) {
+    const name = document.getElementById('teamName').value;
+    
+    if (!name) {
+        e.preventDefault();
+        alert('Please fill in all required fields');
+        return;
+    }
+});
+
+document.getElementById('editTeamForm').addEventListener('submit', function(e) {
+    const name = document.getElementById('editTeamName').value;
+    
+    if (!name) {
+        e.preventDefault();
+        alert('Please fill in all required fields');
+        return;
+    }
+});
+</script>
+{% endblock %} 

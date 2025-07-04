@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Vendor Details{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <a href="{{ url_for('vendors') }}" class="btn btn-secondary mb-3"><i class="fas fa-arrow-left me-2"></i>Back to Vendors</a>
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h3 class="mb-0"><i class="fas fa-briefcase me-2"></i>{{ vendor.name }}</h3>
+        </div>
+        <div class="card-body">
+            <h5>Description</h5>
+            <p>{{ vendor.description or 'No description provided.' }}</p>
+            <h5>Location</h5>
+            <p>{{ vendor.location.name if vendor.location else 'N/A' }}</p>
+            <h5>Contacts</h5>
+            {% if vendor.contacts %}
+            <ul class="list-group mb-3">
+                {% for contact in vendor.contacts %}
+                <li class="list-group-item">
+                    <strong>{{ contact.name }}</strong><br>
+                    <span>Email: {{ contact.email or 'N/A' }}</span><br>
+                    <span>Phone: {{ contact.phone or 'N/A' }}</span><br>
+                    <span>Position: {{ contact.position or 'N/A' }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-muted">No contacts listed.</p>
+            {% endif %}
+            <h5>Files</h5>
+            {% if vendor.files %}
+            <ul class="list-group">
+                {% for file in vendor.files %}
+                <li class="list-group-item">
+                    <a href="/{{ file.filepath }}" target="_blank">{{ file.filename }}</a>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-muted">No files uploaded.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %} 

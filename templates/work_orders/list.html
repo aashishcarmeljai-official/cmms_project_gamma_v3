@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+{% block title %}Work Orders - CMMS{% endblock %}
+{% block content %}
+<!-- Page Header -->
+<div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-clipboard-list text-primary me-2"></i>
+                Work Order Management
+            </h1>
+            <p class="text-muted">Create, assign, and track maintenance work orders</p>
+        </div>
+        <a href="/work-orders/new" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Create Work Order
+        </a>
+    </div>
+</div>
+<!-- Filters -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="statusFilter" class="form-label">Status</label>
+                        <select class="form-select" id="statusFilter">
+                            <option value="">All Status</option>
+                            <option value="open">Open</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="priorityFilter" class="form-label">Priority</label>
+                        <select class="form-select" id="priorityFilter">
+                            <option value="">All Priorities</option>
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="typeFilter" class="form-label">Type</label>
+                        <select class="form-select" id="typeFilter">
+                            <option value="">All Types</option>
+                            <option value="corrective">Corrective</option>
+                            <option value="preventive">Preventive</option>
+                            <option value="emergency">Emergency</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="searchInput" class="form-label">Search</label>
+                        <input type="text" class="form-control" id="searchInput" placeholder="Search work orders...">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Work Orders List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-2"></i>Work Orders List
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if work_orders %}
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="workOrdersTable">
+                            <thead>
+                                <tr>
+                                    <th>Work Order #</th>
+                                    <th>Title</th>
+                                    <th>Equipment</th>
+                                    <th>Assigned To</th>
+                                    <th>Priority</th>
+                                    <th>Status</th>
+                                    <th>Type</th>
+                                    <th>Scheduled</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for wo in work_orders %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ wo.work_order_number }}</strong>
+                                    </td>
+                                    <td>
+                                        <a href="/work-orders/{{ wo.id }}" class="text-decoration-none">
+                                            {{ wo.title }}
+                                        </a>
+                                        <br>
+                                        <small class="text-muted">{{ wo.description[:50] }}{% if wo.description|length > 50 %}...{% endif %}</small>
+                                    </td>
+                                    <td>{{ wo.equipment.name if wo.equipment else 'N/A' }}</td>
+                                    <td>
+                                        {% if wo.assigned_technician %}
+                                            {{ wo.assigned_technician.first_name }} {{ wo.assigned_technician.last_name }}
+                                        {% else %}
+                                            <span class="text-muted">Unassigned</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if wo.priority == 'urgent' else 'warning' if wo.priority == 'high' else 'info' if wo.priority == 'medium' else 'secondary' }}">
+                                            {{ wo.priority.title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if wo.status == 'completed' else 'warning' if wo.status == 'in_progress' else 'danger' if wo.status == 'cancelled' else 'secondary' }}">
+                                            {{ wo.status.replace('_', ' ').title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'primary' if wo.type == 'preventive' else 'warning' if wo.type == 'corrective' else 'danger' }}">
+                                            {{ wo.type.title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if wo.scheduled_date %}
+                                            {{ wo.scheduled_date.strftime('%Y-%m-%d') }}
+                                            <br>
+                                            <small class="text-muted">{{ wo.scheduled_date.strftime('%H:%M') }}</small>
+                                        {% else %}
+                                            <span class="text-muted">Not scheduled</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="/work-orders/{{ wo.id }}" class="btn btn-sm btn-outline-primary" title="View Details">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            {% if wo.status == 'open' %}
+                                                <a href="/work-orders/{{ wo.id }}/update-status" class="btn btn-sm btn-outline-success" title="Start Work" onclick="return confirm('Start this work order?')">
+                                                    <i class="fas fa-play"></i>
+                                                </a>
+                                            {% elif wo.status == 'in_progress' %}
+                                                <a href="/work-orders/{{ wo.id }}/update-status" class="btn btn-sm btn-outline-success" title="Complete Work" onclick="return confirm('Mark this work order as completed?')">
+                                                    <i class="fas fa-check"></i>
+                                                </a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-clipboard-list fa-4x text-muted mb-3"></i>
+                        <h4 class="text-muted">No Work Orders Found</h4>
+                        <p class="text-muted">Get started by creating your first work order.</p>
+                        <a href="/work-orders/new" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Create Work Order
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

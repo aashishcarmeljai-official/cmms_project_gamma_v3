@@ -1,0 +1,335 @@
+{% extends 'base.html' %}
+
+{% block title %}CMMS Dashboard{% endblock %}
+
+{% block extra_head %}
+    {{ super() }}
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+    <style>
+        .stat-card {
+            border-left: 4px solid;
+            transition: transform 0.2s ease-in-out;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+        .stat-card.primary {
+            border-left-color: #4e73df;
+        }
+        .stat-card.success {
+            border-left-color: #1cc88a;
+        }
+        .stat-card.warning {
+            border-left-color: #f6c23e;
+        }
+        .stat-card.danger {
+            border-left-color: #e74a3b;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+            color: white;
+            border-bottom: none;
+        }
+        .dashboard-card {
+            transition: box-shadow 0.2s ease-in-out;
+        }
+        .dashboard-card:hover {
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+        }
+        #dashboard-calendar {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .fc-event {
+            cursor: pointer;
+        }
+        .fc-event:hover {
+            opacity: 0.8;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<!-- Dashboard Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-tachometer-alt text-primary me-2"></i>
+                Maintenance Dashboard
+            </h1>
+            <p class="text-muted mb-0">Overview of your maintenance operations</p>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-lg-6 col-md-6 mb-4">
+        <div class="card stat-card primary shadow h-100 dashboard-card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Total Equipment
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total_equipment }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-cogs fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-lg-6 col-md-6 mb-4">
+        <div class="card stat-card success shadow h-100 dashboard-card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            Operational
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.operational_equipment }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-lg-6 col-md-6 mb-4">
+        <div class="card stat-card warning shadow h-100 dashboard-card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            Open Work Orders
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.open_work_orders }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-lg-6 col-md-6 mb-4">
+        <div class="card stat-card danger shadow h-100 dashboard-card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                            Low Stock Items
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.low_stock_items }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content Row -->
+<div class="row">
+    <!-- Left Column - Work Orders and Calendar -->
+    <div class="col-xl-8 col-lg-7 mb-4">
+        <!-- Recent Work Orders -->
+        <div class="card shadow dashboard-card mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold">
+                    <i class="fas fa-clipboard-list me-2"></i>Recent Work Orders
+                </h6>
+                <a href="/work-orders" class="btn btn-sm btn-light">
+                    <i class="fas fa-plus me-1"></i>View All
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_work_orders %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Work Order</th>
+                                    <th>Equipment</th>
+                                    <th>Status</th>
+                                    <th>Priority</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for wo in recent_work_orders %}
+                                <tr>
+                                    <td>
+                                        <a href="/work-orders/{{ wo.id }}" class="text-decoration-none fw-bold">
+                                            {{ wo.work_order_number }}
+                                        </a>
+                                        <br>
+                                        <small class="text-muted">{{ wo.title }}</small>
+                                    </td>
+                                    <td>{{ wo.equipment.name if wo.equipment else 'N/A' }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if wo.status == 'completed' else 'warning' if wo.status == 'in_progress' else 'secondary' }}">
+                                            {{ wo.status.replace('_', ' ').title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if wo.priority == 'urgent' else 'warning' if wo.priority == 'high' else 'info' if wo.priority == 'medium' else 'secondary' }}">
+                                            {{ wo.priority.title() }}
+                                        </span>
+                                    </td>
+                                    <td>{{ wo.created_at.strftime('%Y-%m-%d') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No work orders found</p>
+                        <a href="/work-orders/new" class="btn btn-primary">
+                            <i class="fas fa-plus me-1"></i>Create Work Order
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Live Calendar -->
+        <div class="card shadow dashboard-card">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold">
+                    <i class="fas fa-calendar-alt me-2"></i>Maintenance Calendar
+                </h6>
+                <div>
+                    <a href="/calendar" class="btn btn-sm btn-light me-2">
+                        <i class="fas fa-expand me-1"></i>Full View
+                    </a>
+                    <a href="/quick-maintenance-schedule" class="btn btn-sm btn-light">
+                        <i class="fas fa-plus me-1"></i>Schedule
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="dashboard-calendar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Sidebar -->
+    <div class="col-xl-4 col-lg-5">
+        <!-- Upcoming Maintenance -->
+        <div class="card shadow mb-4 dashboard-card">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold">
+                    <i class="fas fa-calendar-alt me-2"></i>Upcoming Maintenance
+                </h6>
+                <a href="/quick-maintenance-schedule" class="btn btn-sm btn-light">
+                    <i class="fas fa-plus me-1"></i>Schedule
+                </a>
+            </div>
+            <div class="card-body">
+                {% if upcoming_maintenance %}
+                    <div class="list-group list-group-flush">
+                        {% for schedule in upcoming_maintenance %}
+                        <div class="list-group-item border-0 px-0 py-3">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1 fw-bold">{{ schedule.equipment.name if schedule.equipment else 'Unknown Equipment' }}</h6>
+                                    <p class="mb-2 text-muted small">{{ schedule.description }}</p>
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>
+                                        Due: {{ schedule.next_due.strftime('%Y-%m-%d') if schedule.next_due else 'Not scheduled' }}
+                                    </small>
+                                </div>
+                                <span class="badge bg-info ms-2">{{ schedule.frequency.title() }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-calendar-alt fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No upcoming maintenance scheduled</p>
+                        <a href="/quick-maintenance-schedule" class="btn btn-primary btn-sm">
+                            <i class="fas fa-plus me-1"></i>Schedule Maintenance
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card shadow dashboard-card">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold">
+                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/work-orders/new" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Create Work Order
+                    </a>
+                    <a href="/quick-maintenance-schedule" class="btn btn-outline-success">
+                        <i class="fas fa-calendar-plus me-2"></i>Schedule Maintenance
+                    </a>
+                    <a href="/equipment/new" class="btn btn-outline-primary">
+                        <i class="fas fa-cog me-2"></i>Add Equipment
+                    </a>
+                    <a href="/inventory/new" class="btn btn-outline-primary">
+                        <i class="fas fa-box me-2"></i>Add Inventory Item
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        var calendarEl = document.getElementById('dashboard-calendar');
+        if (calendarEl) {
+          var calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            height: 400,
+            headerToolbar: {
+              left: 'prev,next',
+              center: 'title',
+              right: 'today'
+            },
+            events: '/api/calendar-events',
+            eventClick: function(info) {
+              if (info.event.url) {
+                window.open(info.event.url, '_blank', 'location=no,menubar=no,toolbar=no,scrollbars=yes,resizable=yes,width=1200,height=800');
+                info.jsEvent.preventDefault();
+              }
+            },
+            nowIndicator: true,
+            dayMaxEvents: 3,
+            eventDisplay: 'block',
+            eventTimeFormat: {
+              hour: 'numeric',
+              minute: '2-digit',
+              meridiem: 'short'
+            }
+          });
+          calendar.render();
+        }
+      });
+    </script>
+{% endblock %} 

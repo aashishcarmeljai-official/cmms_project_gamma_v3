@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Add Vendor{% endblock %}
+{% block content %}
+<div class="container">
+    <h1 class="h3 mb-4">Add Vendor</h1>
+    <form method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label for="name" class="form-label">Vendor Name *</label>
+            <input type="text" class="form-control" id="name" name="name" required>
+        </div>
+        <div class="mb-3">
+            <label for="description" class="form-label">Description</label>
+            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+        </div>
+        <div class="mb-3">
+            <label for="location_id" class="form-label">Location</label>
+            <select class="form-select" id="location_id" name="location_id">
+                <option value="">Select Location</option>
+                {% for loc in locations %}
+                    <option value="{{ loc.id }}">{{ loc.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Contacts</label>
+            <div id="contacts-list">
+                <div class="row g-2 mb-2 contact-row">
+                    <div class="col-md-3"><input type="text" class="form-control" name="contact_name" placeholder="Name"></div>
+                    <div class="col-md-3"><input type="email" class="form-control" name="contact_email" placeholder="Email"></div>
+                    <div class="col-md-2"><input type="text" class="form-control" name="contact_phone" placeholder="Phone"></div>
+                    <div class="col-md-3"><input type="text" class="form-control" name="contact_position" placeholder="Position"></div>
+                    <div class="col-md-1 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-contact" tabindex="-1">&times;</button></div>
+                </div>
+            </div>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="add-contact">Add Contact</button>
+        </div>
+        <div class="mb-3">
+            <label for="files" class="form-label">Files</label>
+            <input type="file" class="form-control" id="files" name="files" multiple>
+        </div>
+        <div class="mb-3">
+            <label for="equipment" class="form-label">Equipment</label>
+            <select class="form-select" id="equipment" name="equipment" multiple>
+                {% for eq in equipment_list %}
+                    <option value="{{ eq.id }}">{{ eq.name }}</option>
+                {% endfor %}
+            </select>
+            <small class="form-text text-muted">Hold Ctrl (Windows) or Cmd (Mac) to select multiple.</small>
+        </div>
+        <div class="mb-3">
+            <label for="inventory" class="form-label">Inventory Items</label>
+            <select class="form-select" id="inventory" name="inventory" multiple>
+                {% for inv in inventory_list %}
+                    <option value="{{ inv.id }}">{{ inv.name }}</option>
+                {% endfor %}
+            </select>
+            <small class="form-text text-muted">Hold Ctrl (Windows) or Cmd (Mac) to select multiple.</small>
+        </div>
+        <button type="submit" class="btn btn-success">Add Vendor</button>
+        <a href="{{ url_for('vendors') }}" class="btn btn-secondary ms-2">Cancel</a>
+    </form>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('add-contact').onclick = function() {
+            const row = document.createElement('div');
+            row.className = 'row g-2 mb-2 contact-row';
+            row.innerHTML = `
+                <div class="col-md-3"><input type="text" class="form-control" name="contact_name" placeholder="Name"></div>
+                <div class="col-md-3"><input type="email" class="form-control" name="contact_email" placeholder="Email"></div>
+                <div class="col-md-2"><input type="text" class="form-control" name="contact_phone" placeholder="Phone"></div>
+                <div class="col-md-3"><input type="text" class="form-control" name="contact_position" placeholder="Position"></div>
+                <div class="col-md-1 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-contact" tabindex="-1">&times;</button></div>
+            `;
+            document.getElementById('contacts-list').appendChild(row);
+        };
+        document.getElementById('contacts-list').addEventListener('click', function(e) {
+            if (e.target.classList.contains('remove-contact')) {
+                const row = e.target.closest('.contact-row');
+                if (row) row.remove();
+            }
+        });
+    });
+</script>
+{% endblock %} 

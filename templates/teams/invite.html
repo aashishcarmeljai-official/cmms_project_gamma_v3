@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Invite to Team{% endblock %}
+{% block content %}
+<div class="container">
+    <h1 class="h3 mb-4">Invite to Team</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    <div class="mb-4">
+        <label class="form-label fw-bold">Invite Link</label>
+        <div class="input-group">
+            <input type="text" class="form-control" value="{{ invite_link }}" readonly id="inviteLinkInput">
+            <button class="btn btn-outline-secondary" type="button" onclick="copyInviteLink()">Copy</button>
+        </div>
+        <small class="form-text text-muted">Share this link to invite someone to your company.</small>
+    </div>
+    <hr>
+    <h5>Manual Invitation</h5>
+    <form method="POST">
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <label for="name" class="form-label">Name</label>
+                <input type="text" class="form-control" id="name" name="name" required>
+            </div>
+            <div class="col-md-4">
+                <label for="email" class="form-label">Email</label>
+                <input type="email" class="form-control" id="email" name="email" required>
+            </div>
+            <div class="col-md-4">
+                <label for="role" class="form-label">Role</label>
+                <select class="form-select" id="role" name="role" required>
+                    <option value="">Select Role</option>
+                    {% for r in roles %}
+                        <option value="{{ r }}">{{ r|capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-success">Send Invitation</button>
+    </form>
+</div>
+<script>
+function copyInviteLink() {
+    var copyText = document.getElementById("inviteLinkInput");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999);
+    document.execCommand("copy");
+}
+</script>
+{% endblock %} 
