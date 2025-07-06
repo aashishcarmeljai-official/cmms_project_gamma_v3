@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session, send_from_directory, Response, send_file
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session, send_from_directory, Response, send_file, abort
 import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -53,7 +53,7 @@ db.init_app(app)
 mail = Mail(app)
 
 # Import models after db initialization
-from models import User, Equipment, WorkOrder, MaintenanceSchedule, Inventory, WorkOrderPart, Location, Team, WorkOrderComment, SOP, SOPChecklistItem, WorkOrderChecklist, WhatsAppUser, EmergencyBroadcast, NotificationLog, WhatsAppTemplate, WhatsAppMessage, Company, Role, Department, Vendor, VendorContact, VendorFile
+from models import User, Equipment, WorkOrder, MaintenanceSchedule, Inventory, WorkOrderPart, Location, Team, WorkOrderComment, SOP, SOPChecklistItem, WorkOrderChecklist, WhatsAppUser, EmergencyBroadcast, NotificationLog, WhatsAppTemplate, WhatsAppMessage, Company, Role, Department, Category, Vendor, VendorContact, VendorFile
 
 # Custom Jinja2 filters
 @app.template_filter('from_json')
@@ -149,6 +149,68 @@ def create_default_departments_for_company(company_id):
             dept = Department(company_id=company_id, name=dept_name)
             db.session.add(dept)
     db.session.commit()
+
+def create_default_categories_for_company(company_id):
+    """Create default categories for a new company"""
+    from models import Category
+    
+    default_equipment_categories = [
+        ('Machinery', 'Heavy machinery and production equipment'),
+        ('Electrical', 'Electrical systems and components'),
+        ('HVAC', 'Heating, ventilation, and air conditioning'),
+        ('Plumbing', 'Plumbing systems and fixtures'),
+        ('Vehicles', 'Company vehicles and transportation'),
+        ('Computers', 'Computer systems and IT equipment'),
+        ('Furniture', 'Office furniture and fixtures'),
+        ('Tools', 'Hand tools and power tools')
+    ]
+    
+    default_inventory_categories = [
+        ('Filters', 'Air, oil, and water filters'),
+        ('Bearings', 'Mechanical bearings and bushings'),
+        ('Belts', 'Drive belts and conveyor belts'),
+        ('Motors', 'Electric motors and drives'),
+        ('Electrical', 'Electrical components and supplies'),
+        ('Lubricants', 'Oils, greases, and lubricants'),
+        ('Fasteners', 'Bolts, nuts, screws, and washers'),
+        ('Pipes', 'Pipes, fittings, and tubing'),
+        ('Valves', 'Control valves and regulators'),
+        ('Sensors', 'Sensors and instrumentation'),
+        ('Tools', 'Maintenance tools and equipment'),
+        ('Safety', 'Safety equipment and supplies')
+    ]
+    
+    # Add equipment categories
+    for name, description in default_equipment_categories:
+        exists = Category.query.filter_by(company_id=company_id, name=name, type='equipment').first()
+        if not exists:
+            category = Category(
+                company_id=company_id,
+                name=name,
+                type='equipment',
+                description=description,
+                color='#007bff'
+            )
+            db.session.add(category)
+    
+    # Add inventory categories
+    for name, description in default_inventory_categories:
+        exists = Category.query.filter_by(company_id=company_id, name=name, type='inventory').first()
+        if not exists:
+            category = Category(
+                company_id=company_id,
+                name=name,
+                type='inventory',
+                description=description,
+                color='#28a745'
+            )
+            db.session.add(category)
+    
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating default categories: {e}")
 
 # Utility functions
 def generate_work_order_number():
@@ -462,14 +524,19 @@ def equipment_new():
         db.session.commit()
         flash('Equipment created successfully!', 'success')
         return redirect(url_for('equipment_list'))
-    return render_template('equipment/new.html')
+    
+    # Get categories for the dropdown
+    categories = filter_by_company(Category.query).filter_by(is_active=True).order_by(Category.name).all()
+    return render_template('equipment/new.html', categories=categories)
 
 @app.route('/equipment/<int:id>')
 @login_required
 def equipment_detail(id):
     if not user_has_permission(current_user, 'equipment_view'):
         abort(403)
-    equipment = filter_by_company(Equipment.query).filter_by(id=id).first_or_404()
+    equipment = filter_by_company(Equipment.query).filter_by(id=id).first()
+    if not equipment:
+        abort(404)
     work_orders = filter_by_company(WorkOrder.query).filter_by(equipment_id=id).order_by(WorkOrder.created_at.desc()).all()
     maintenance_schedules = filter_by_company(MaintenanceSchedule.query).filter_by(equipment_id=id).all()
     today = datetime.now()
@@ -484,7 +551,9 @@ def equipment_detail(id):
 def equipment_delete(id):
     if not user_has_permission(current_user, 'equipment_delete'):
         abort(403)
-    equipment = filter_by_company(Equipment.query).filter_by(id=id).first_or_404()
+    equipment = filter_by_company(Equipment.query).filter_by(id=id).first()
+    if not equipment:
+        abort(404)
     try:
         work_orders = filter_by_company(WorkOrder.query).filter_by(equipment_id=id).all()
         maintenance_schedules = filter_by_company(MaintenanceSchedule.query).filter_by(equipment_id=id).all()
@@ -503,6 +572,112 @@ def equipment_delete(id):
         db.session.rollback()
         flash(f'Error deleting equipment: {str(e)}', 'error')
     return redirect(url_for('equipment_list'))
+
+# Category Management Routes
+@app.route('/categories')
+@login_required
+def categories_list():
+    if not user_has_permission(current_user, 'category_view'):
+        abort(403)
+    categories = filter_by_company(Category.query).order_by(Category.type, Category.name).all()
+    return render_template('categories/list.html', categories=categories)
+
+@app.route('/categories/new', methods=['GET', 'POST'])
+@login_required
+def category_new():
+    if not user_has_permission(current_user, 'category_create'):
+        abort(403)
+    if request.method == 'POST':
+        data = request.form
+        category = Category(
+            name=data['name'],
+            type=data['type'],
+            description=data.get('description'),
+            color=data.get('color', '#007bff'),
+            company_id=current_user.company_id
+        )
+        try:
+            db.session.add(category)
+            db.session.commit()
+            
+            # Check if this is an AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': True,
+                    'message': 'Category created successfully!',
+                    'category': category.to_dict()
+                })
+            
+            flash('Category created successfully!', 'success')
+            return redirect(url_for('categories_list'))
+        except Exception as e:
+            db.session.rollback()
+            error_msg = f'Error creating category: {str(e)}'
+            
+            # Check if this is an AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': False,
+                    'error': error_msg
+                })
+            
+            flash(error_msg, 'error')
+    
+    return render_template('categories/new.html')
+
+@app.route('/categories/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def category_edit(id):
+    if not user_has_permission(current_user, 'category_edit'):
+        abort(403)
+    category = filter_by_company(Category.query).filter_by(id=id).first()
+    if not category:
+        abort(404)
+    if request.method == 'POST':
+        data = request.form
+        category.name = data['name']
+        category.type = data['type']
+        category.description = data.get('description')
+        category.color = data.get('color', '#007bff')
+        try:
+            db.session.commit()
+            flash('Category updated successfully!', 'success')
+            return redirect(url_for('categories_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating category: {str(e)}', 'error')
+    return render_template('categories/edit.html', category=category)
+
+@app.route('/categories/<int:id>/delete', methods=['POST'])
+@login_required
+def category_delete(id):
+    if not user_has_permission(current_user, 'category_delete'):
+        abort(403)
+    category = filter_by_company(Category.query).filter_by(id=id).first()
+    if not category:
+        abort(404)
+    try:
+        db.session.delete(category)
+        db.session.commit()
+        flash(f'Category "{category.name}" deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting category: {str(e)}', 'error')
+    return redirect(url_for('categories_list'))
+
+@app.route('/api/categories/<category_type>')
+@login_required
+def api_categories(category_type):
+    """API endpoint to get categories by type (equipment or inventory)"""
+    if category_type not in ['equipment', 'inventory']:
+        return jsonify({'error': 'Invalid category type'}), 400
+    
+    categories = filter_by_company(Category.query).filter_by(
+        type=category_type, 
+        is_active=True
+    ).order_by(Category.name).all()
+    
+    return jsonify([category.to_dict() for category in categories])
 
 # Work Order routes
 @app.route('/work-orders')
@@ -755,9 +930,10 @@ def inventory_new():
         flash('Inventory item created successfully!', 'success')
         return redirect(url_for('inventory_list'))
     
-    # Get locations for dropdown
+    # Get categories and locations for the dropdowns
+    categories = filter_by_company(Category.query).filter_by(is_active=True).order_by(Category.name).all()
     locations = filter_by_company(Location.query).order_by(Location.name).all()
-    return render_template('inventory/new.html', locations=locations)
+    return render_template('inventory/new.html', categories=categories, locations=locations)
 
 @app.route('/inventory/<int:id>')
 @login_required
@@ -787,7 +963,9 @@ def inventory_delete(id):
 def inventory_edit(id):
     if not user_has_permission(current_user, 'inventory_edit'):
         abort(403)
-    inventory = Inventory.query.get_or_404(id)
+    inventory = Inventory.query.get(id)
+    if not inventory:
+        abort(404)
     enforce_company_access(inventory)
     form = InventoryForm(obj=inventory)
     # Company-scoped dropdowns
@@ -1297,6 +1475,20 @@ class TeamForm(FlaskForm):
     members = SelectMultipleField('Add Members', coerce=int, validators=[Optional()])
     submit = SubmitField('Save')
 
+class InventoryForm(FlaskForm):
+    name = StringField('Name', validators=[DataRequired(), Length(max=200)])
+    part_number = StringField('Part Number', validators=[DataRequired(), Length(max=100)])
+    category = StringField('Category', validators=[DataRequired(), Length(max=100)])
+    location = StringField('Location', validators=[Optional(), Length(max=200)])
+    description = TextAreaField('Description', validators=[Optional(), Length(max=1000)])
+    current_stock = IntegerField('Current Stock', validators=[DataRequired()])
+    minimum_stock = IntegerField('Minimum Stock', validators=[DataRequired()])
+    unit_cost = FloatField('Unit Cost', validators=[Optional()])
+    unit_of_measure = StringField('Unit of Measure', validators=[Optional(), Length(max=50)])
+    equipment_id = SelectField('Associated Equipment', coerce=int, validators=[Optional()])
+    is_active = BooleanField('Is Active', default=True)
+    submit = SubmitField('Save')
+
 # Google OAuth blueprint
 app.config['OAUTHLIB_INSECURE_TRANSPORT'] = True  # Remove in production
 
@@ -1347,17 +1539,19 @@ def signup():
                 
                 # Create default departments for the new company
                 create_default_departments_for_company(company_id)
+                
+                # Create default categories for the new company
+                create_default_categories_for_company(company_id)
             else:  # existing_org
                 company_id = int(form.company_id.data)
             
             # Create user
-            user = User(
-                username=form.username.data,
-                email=form.email.data,
-                first_name=form.first_name.data,
-                last_name=form.last_name.data,
-                company_id=company_id
-            )
+            user = User()
+            user.username = form.username.data
+            user.email = form.email.data
+            user.first_name = form.first_name.data
+            user.last_name = form.last_name.data
+            user.company_id = company_id
             # Set admin role for the first user of a new organization
             if form.organization_type.data == 'new_org':
                 user.role = 'admin'
@@ -1431,16 +1625,15 @@ def login_google():
         technician_role = None
         if company:
             technician_role = Role.query.filter_by(company_id=company.id, name='technician').first()
-        user = User(
-            username=info.get('email').split('@')[0],
-            email=info.get('email'),
-            first_name=info.get('given_name', ''),
-            last_name=info.get('family_name', ''),
-            google_id=info.get('id'),
-            company_id=company.id if company else None,
-            role='technician',
-            role_id=technician_role.id if technician_role else None
-        )
+        user = User()
+        user.username = info.get('email').split('@')[0]
+        user.email = info.get('email')
+        user.first_name = info.get('given_name', '')
+        user.last_name = info.get('family_name', '')
+        user.google_id = info.get('id')
+        user.company_id = company.id if company else None
+        user.role = 'technician'
+        user.role_id = technician_role.id if technician_role else None
         db.session.add(user)
         db.session.commit()
     # Update last login timestamp
@@ -4526,12 +4719,13 @@ def quick_asset_registry_add():
         return redirect(url_for('dashboard'))
     
     try:
-        asset_type = request.form.get('asset_type')
-        name = request.form.get('name')
-        identifier = request.form.get('identifier')
-        category = request.form.get('category')
-        location = request.form.get('location')
-        description = request.form.get('description')
+        data = request.form
+        asset_type = data.get('asset_type')
+        name = data.get('name')
+        identifier = data.get('identifier')
+        category = data.get('category')
+        location = data.get('location')
+        description = data.get('description')
         
         if asset_type == 'equipment':
             equipment = Equipment(
@@ -4705,7 +4899,7 @@ def quick_asset_registry_template():
         '', '', '', '',
         '50', '10', '25.50', 'pieces',
         'Replacement filter for pump stations'
-    ])
+        ])
     
     output.seek(0)
     

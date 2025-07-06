@@ -19,8 +19,41 @@ class Company(db.Model):
     locations = db.relationship('Location', backref='company', lazy=True)
     teams = db.relationship('Team', backref='company', lazy=True)
     roles = db.relationship('Role', backref='company', lazy=True)
+    categories = db.relationship('Category', backref='company', lazy=True)
     # inventory_items relationship removed to avoid backref conflict
     # Add more as needed
+
+# --- Category Management Model ---
+class Category(db.Model):
+    __tablename__ = 'categories'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    type = db.Column(db.String(20), nullable=False)  # 'equipment' or 'inventory'
+    description = db.Column(db.Text)
+    color = db.Column(db.String(7), default='#007bff')  # Hex color code
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Add unique constraint for name and type within company
+    __table_args__ = (db.UniqueConstraint('company_id', 'name', 'type', name='uq_category_company_name_type'),)
+    
+    def __repr__(self):
+        return f'<Category {self.name} ({self.type})>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'type': self.type,
+            'description': self.description,
+            'color': self.color,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat()
+        }
 
 # --- Role Management Model ---
 class Role(db.Model):

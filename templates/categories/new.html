@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Add Category - CMMS{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/admin">Admin</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('categories_list') }}">Categories</a></li>
+                    <li class="breadcrumb-item active">Add Category</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-plus text-primary me-2"></i>
+                Add New Category
+            </h1>
+            <p class="text-muted">Create a new category for equipment or inventory</p>
+        </div>
+    </div>
+
+    <!-- Category Form -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tag me-2"></i>Category Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('category_new') }}">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Category Name *</label>
+                                    <input type="text" class="form-control" id="name" name="name" required>
+                                    <div class="form-text">Enter a unique name for this category</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="type" class="form-label">Category Type *</label>
+                                    <select class="form-select" id="type" name="type" required>
+                                        <option value="">Select Type</option>
+                                        <option value="equipment">Equipment</option>
+                                        <option value="inventory">Inventory</option>
+                                    </select>
+                                    <div class="form-text">Choose whether this category is for equipment or inventory items</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color" class="form-label">Color</label>
+                                    <input type="color" class="form-control form-control-color" id="color" name="color" value="#007bff">
+                                    <div class="form-text">Choose a color to represent this category</div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="description" class="form-label">Description</label>
+                                    <textarea class="form-control" id="description" name="description" rows="4" placeholder="Brief description of this category"></textarea>
+                                    <div class="form-text">Optional description to help identify this category</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                                        <label class="form-check-label" for="is_active">
+                                            Active
+                                        </label>
+                                        <div class="form-text">Inactive categories won't appear in dropdowns</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Form Actions -->
+                        <div class="row">
+                            <div class="col-12">
+                                <hr class="my-4">
+                                <div class="d-flex justify-content-between">
+                                    <a href="{{ url_for('categories_list') }}" class="btn btn-secondary">
+                                        <i class="fas fa-arrow-left me-2"></i>Cancel
+                                    </a>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-save me-2"></i>Create Category
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-generate category name suggestions based on type
+document.getElementById('type').addEventListener('change', function() {
+    const type = this.value;
+    const nameField = document.getElementById('name');
+    
+    if (type === 'equipment') {
+        nameField.placeholder = 'e.g., Machinery, Electrical, HVAC, Vehicles';
+    } else if (type === 'inventory') {
+        nameField.placeholder = 'e.g., Filters, Bearings, Tools, Fasteners';
+    } else {
+        nameField.placeholder = 'Enter category name';
+    }
+});
+
+// Form validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    const name = document.getElementById('name').value.trim();
+    const type = document.getElementById('type').value;
+    
+    if (!name) {
+        e.preventDefault();
+        alert('Please enter a category name');
+        return;
+    }
+    
+    if (!type) {
+        e.preventDefault();
+        alert('Please select a category type');
+        return;
+    }
+});
+</script>
+{% endblock %} 
