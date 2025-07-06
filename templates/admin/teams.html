@@ -30,37 +30,90 @@
         </div>
         <div class="card-body">
             <form method="GET" class="row g-3">
-                <div class="col-md-4">
-                    <label for="search" class="form-label">Search</label>
+                <!-- First Row -->
+                <div class="col-lg-4 col-md-6">
+                    <label for="search" class="form-label fw-bold">Search</label>
                     <input type="text" class="form-control" id="search" name="search" 
-                           value="{{ request.args.get('search', '') }}" placeholder="Team name or description">
+                           value="{{ filters.search }}" placeholder="Team name or description">
                 </div>
-                <div class="col-md-3">
-                    <label for="department_filter" class="form-label">Department</label>
+                <div class="col-lg-2 col-md-6">
+                    <label for="department_filter" class="form-label fw-bold">Department</label>
                     <select class="form-select" id="department_filter" name="department">
                         <option value="">All Departments</option>
                         {% for dept in departments %}
-                            <option value="{{ dept }}">{{ dept }}</option>
+                            <option value="{{ dept }}" {{ 'selected' if filters.department == dept }}>{{ dept }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label for="status_filter" class="form-label">Status</label>
+                <div class="col-lg-2 col-md-6">
+                    <label for="status_filter" class="form-label fw-bold">Status</label>
                     <select class="form-select" id="status_filter" name="status">
                         <option value="">All Status</option>
-                        <option value="active" {{ 'selected' if request.args.get('status') == 'active' }}>Active</option>
-                        <option value="inactive" {{ 'selected' if request.args.get('status') == 'inactive' }}>Inactive</option>
+                        <option value="active" {{ 'selected' if filters.status == 'active' }}>Active</option>
+                        <option value="inactive" {{ 'selected' if filters.status == 'inactive' }}>Inactive</option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">&nbsp;</label>
-                    <div class="d-grid">
+                <div class="col-lg-2 col-md-6">
+                    <label for="sort_by" class="form-label fw-bold">Sort By</label>
+                    <select class="form-select" id="sort_by" name="sort">
+                        <option value="name" {{ 'selected' if filters.sort == 'name' }}>Name</option>
+                        <option value="created_at" {{ 'selected' if filters.sort == 'created_at' }}>Created Date</option>
+                        <option value="member_count" {{ 'selected' if filters.sort == 'member_count' }}>Member Count</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-6">
+                    <label for="sort_order" class="form-label fw-bold">Order</label>
+                    <select class="form-select" id="sort_order" name="order">
+                        <option value="asc" {{ 'selected' if filters.order == 'asc' }}>Ascending</option>
+                        <option value="desc" {{ 'selected' if filters.order == 'desc' }}>Descending</option>
+                    </select>
+                </div>
+                
+                <!-- Second Row -->
+                <div class="col-12">
+                    <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-search me-2"></i>Search
+                            <i class="fas fa-search me-2"></i>Apply Filters
+                        </button>
+                        <a href="{{ url_for('admin_teams') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i>Clear Filters
+                        </a>
+                        <button type="button" class="btn btn-outline-info" onclick="toggleAdvancedFilters()">
+                            <i class="fas fa-cog me-2"></i>Advanced Options
                         </button>
                     </div>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Quick Filter Buttons -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-white">Quick Filters</h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-12">
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-outline-primary" onclick="applyQuickFilter('active')">
+                            <i class="fas fa-check-circle me-1"></i>Active Teams
+                        </button>
+                        <button type="button" class="btn btn-outline-warning" onclick="applyQuickFilter('inactive')">
+                            <i class="fas fa-times-circle me-1"></i>Inactive Teams
+                        </button>
+                        <button type="button" class="btn btn-outline-info" onclick="applyQuickFilter('recent')">
+                            <i class="fas fa-calendar-plus me-1"></i>Recently Created
+                        </button>
+                        <button type="button" class="btn btn-outline-success" onclick="applyQuickFilter('large')">
+                            <i class="fas fa-users me-1"></i>Large Teams (5+ members)
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" onclick="applyQuickFilter('small')">
+                            <i class="fas fa-user me-1"></i>Small Teams (1-2 members)
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -74,7 +127,7 @@
                             <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
                                 Total Teams
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ teams|length }}</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_teams }}</div>
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-user-friends fa-2x text-gray-300"></i>
@@ -92,9 +145,7 @@
                             <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
                                 Active Teams
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ teams|selectattr('is_active', 'equalto', True)|list|length }}
-                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ active_teams }}</div>
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-check-circle fa-2x text-gray-300"></i>
@@ -112,13 +163,7 @@
                             <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
                                 Total Members
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {% set total_members = 0 %}
-                                {% for team in teams %}
-                                    {% set total_members = total_members + team.members|length %}
-                                {% endfor %}
-                                {{ total_members }}
-                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_members }}</div>
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-users fa-2x text-gray-300"></i>
@@ -136,7 +181,7 @@
                             <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
                                 Available Technicians
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ technicians|length }}</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ available_technicians }}</div>
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-user-cog fa-2x text-gray-300"></i>
@@ -889,6 +934,66 @@ document.getElementById('editTeamForm').addEventListener('submit', function(e) {
         alert('Please fill in all required fields');
         return;
     }
+});
+
+// Search and filter functionality
+function applyQuickFilter(filterType) {
+    let url = new URL(window.location);
+    
+    switch(filterType) {
+        case 'active':
+            url.searchParams.set('status', 'active');
+            break;
+        case 'inactive':
+            url.searchParams.set('status', 'inactive');
+            break;
+        case 'recent':
+            url.searchParams.set('sort', 'created_at');
+            url.searchParams.set('order', 'desc');
+            break;
+        case 'large':
+            // This would need backend support for member count filtering
+            alert('Large teams filter requires backend implementation');
+            return;
+        case 'small':
+            // This would need backend support for member count filtering
+            alert('Small teams filter requires backend implementation');
+            return;
+    }
+    
+    window.location.href = url.toString();
+}
+
+function toggleAdvancedFilters() {
+    const advancedFilters = document.querySelectorAll('#sort_by, #sort_order');
+    const button = document.querySelector('button[onclick="toggleAdvancedFilters()"]');
+    
+    advancedFilters.forEach(filter => {
+        if (filter.style.display === 'none') {
+            filter.style.display = 'block';
+            button.innerHTML = '<i class="fas fa-eye-slash me-2"></i>Hide Advanced';
+        } else {
+            filter.style.display = 'none';
+            button.innerHTML = '<i class="fas fa-cog me-2"></i>Advanced Options';
+        }
+    });
+}
+
+// Auto-submit form on filter change
+document.addEventListener('DOMContentLoaded', function() {
+    const filterInputs = document.querySelectorAll('#search, #department_filter, #status_filter');
+    
+    filterInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            document.querySelector('form[method="GET"]').submit();
+        });
+    });
+    
+    // Initialize advanced filters as hidden by default
+    const advancedFilters = document.querySelectorAll('#sort_by, #sort_order');
+    advancedFilters.forEach(filter => {
+        filter.style.display = 'none';
+    });
 });
 </script>
 {% endblock %} 

@@ -12,10 +12,14 @@ def filter_by_company(query: Query, model=None, company_id=None):
             company_id = current_user.company_id
         else:
             raise Exception("Current user does not have a company_id attribute.")
+    
     if model is not None:
-        return query.filter(getattr(model, 'company_id') == company_id)
+        filtered_query = query.filter(getattr(model, 'company_id') == company_id)
+    else:
     # If model is not provided, assume query is already model-scoped
-    return query.filter_by(company_id=company_id)
+        filtered_query = query.filter_by(company_id=company_id)
+    
+    return filtered_query
 
 
 def enforce_company_access(obj):

@@ -56,8 +56,8 @@
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-2">
-                        <a href="{{ url_for('admin_equipment') }}" class="btn btn-outline-primary">
-                            <i class="fas fa-tools me-2"></i>Manage Equipment
+                        <a href="{{ url_for('admin_asset_management') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-cogs me-2"></i>Asset Management
                         </a>
                         <a href="{{ url_for('inventory_list') }}" class="btn btn-outline-info">
                             <i class="fas fa-boxes me-2"></i>Manage Inventory
@@ -65,9 +65,7 @@
                         <a href="{{ url_for('locations_list') }}" class="btn btn-outline-success">
                             <i class="fas fa-map-marker-alt me-2"></i>Manage Locations
                         </a>
-                        <button class="btn btn-outline-warning" onclick="bulkAssetActions()">
-                            <i class="fas fa-cogs me-2"></i>Bulk Asset Actions
-                        </button>
+
                     </div>
                 </div>
             </div>
@@ -332,9 +330,7 @@ function bulkUserActions() {
     window.open('{{ url_for("admin_users") }}', '_blank', 'location=no,menubar=no,toolbar=no,scrollbars=yes,resizable=yes,width=1200,height=800');
 }
 
-function bulkAssetActions() {
-    window.open('{{ url_for("admin_equipment") }}', '_blank', 'location=no,menubar=no,toolbar=no,scrollbars=yes,resizable=yes,width=1200,height=800');
-}
+
 
 function bulkWorkOrderActions() {
     window.open('{{ url_for("admin_work_orders") }}', '_blank', 'location=no,menubar=no,toolbar=no,scrollbars=yes,resizable=yes,width=1200,height=800');

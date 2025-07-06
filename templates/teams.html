@@ -37,7 +37,7 @@
                                     <td>{{ user.username }}</td>
                                     <td>{{ user.email }}</td>
                                     <td>
-                                        {% if user.teams.count() > 0 %}
+                                        {% if user.teams|length > 0 %}
                                             {{ user.teams[0].name }}
                                         {% else %}
                                             <span class="text-muted">-</span>

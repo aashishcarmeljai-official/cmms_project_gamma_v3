@@ -469,9 +469,9 @@ def equipment_new():
 def equipment_detail(id):
     if not user_has_permission(current_user, 'equipment_view'):
         abort(403)
-    equipment = Equipment.query.get_or_404(id)
+    equipment = filter_by_company(Equipment.query).filter_by(id=id).first_or_404()
     work_orders = filter_by_company(WorkOrder.query).filter_by(equipment_id=id).order_by(WorkOrder.created_at.desc()).all()
-    maintenance_schedules = MaintenanceSchedule.query.filter_by(equipment_id=id).all()
+    maintenance_schedules = filter_by_company(MaintenanceSchedule.query).filter_by(equipment_id=id).all()
     today = datetime.now()
     return render_template('equipment/detail.html', 
                          equipment=equipment, 
@@ -484,10 +484,10 @@ def equipment_detail(id):
 def equipment_delete(id):
     if not user_has_permission(current_user, 'equipment_delete'):
         abort(403)
-    equipment = Equipment.query.get_or_404(id)
+    equipment = filter_by_company(Equipment.query).filter_by(id=id).first_or_404()
     try:
         work_orders = filter_by_company(WorkOrder.query).filter_by(equipment_id=id).all()
-        maintenance_schedules = MaintenanceSchedule.query.filter_by(equipment_id=id).all()
+        maintenance_schedules = filter_by_company(MaintenanceSchedule.query).filter_by(equipment_id=id).all()
         for work_order in work_orders:
             work_order_parts = WorkOrderPart.query.filter_by(work_order_id=work_order.id).all()
             for part in work_order_parts:
@@ -588,9 +588,9 @@ def work_order_new():
         flash('Work order created successfully!', 'success')
         return redirect(url_for('work_orders_list'))
     
-    equipment = Equipment.query.all()
-    technicians = User.query.filter_by(role='technician').all()
-    teams = Team.query.all()
+    equipment = filter_by_company(Equipment.query).all()
+    technicians = filter_by_company(User.query).filter_by(role='technician').all()
+    teams = filter_by_company(Team.query).all()
     return render_template('work_orders/new.html', equipment=equipment, technicians=technicians, teams=teams)
 
 @app.route('/work-orders/<int:id>')
@@ -614,9 +614,9 @@ def work_order_update_status(id):
         work_order.status = new_status
         
         if new_status == 'in_progress' and not work_order.actual_start_time:
-            work_order.actual_start_time = datetime.now()
+            work_order.actual_start_time = datetime.utcnow()
         elif new_status == 'completed' and not work_order.actual_end_time:
-            work_order.actual_end_time = datetime.now()
+            work_order.actual_end_time = datetime.utcnow()
             if work_order.actual_start_time:
                 work_order.actual_duration = int((work_order.actual_end_time - work_order.actual_start_time).total_seconds() / 60)
         
@@ -832,6 +832,66 @@ def api_system_health():
     
     health_data = calculate_system_health()
     return jsonify(health_data)
+
+@app.route('/api/admin/dashboard-stats')
+@login_required
+def api_admin_dashboard_stats():
+    """API endpoint for admin dashboard statistics"""
+    if current_user.role not in ['admin', 'manager']:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    # Get overview statistics with proper company filtering
+    total_equipment = filter_by_company(Equipment.query).count()
+    total_work_orders = filter_by_company(WorkOrder.query).count()
+    open_work_orders = filter_by_company(WorkOrder.query).filter_by(status='open').count()
+    in_progress_work_orders = filter_by_company(WorkOrder.query).filter_by(status='in_progress').count()
+    completed_work_orders = filter_by_company(WorkOrder.query).filter_by(status='completed').count()
+    total_technicians = filter_by_company(User.query).filter_by(role='technician').count()
+    
+    # Get equipment by status
+    operational_equipment = filter_by_company(Equipment.query).filter_by(status='operational').count()
+    maintenance_equipment = filter_by_company(Equipment.query).filter_by(status='maintenance').count()
+    offline_equipment = filter_by_company(Equipment.query).filter_by(status='offline').count()
+    
+    # Get work orders by priority
+    urgent_work_orders = filter_by_company(WorkOrder.query).filter_by(priority='urgent').count()
+    high_work_orders = filter_by_company(WorkOrder.query).filter_by(priority='high').count()
+    medium_work_orders = filter_by_company(WorkOrder.query).filter_by(priority='medium').count()
+    low_work_orders = filter_by_company(WorkOrder.query).filter_by(priority='low').count()
+    
+    # Get user counts by role
+    admin_count = filter_by_company(User.query).filter_by(role='admin').count()
+    manager_count = filter_by_company(User.query).filter_by(role='manager').count()
+    technician_count = filter_by_company(User.query).filter_by(role='technician').count()
+    viewer_count = filter_by_company(User.query).filter_by(role='viewer').count()
+    total_users = filter_by_company(User.query).count()
+    
+    # Calculate system health
+    system_health_data = calculate_system_health()
+    
+    return jsonify({
+        'total_equipment': total_equipment,
+        'total_work_orders': total_work_orders,
+        'open_work_orders': open_work_orders,
+        'in_progress_work_orders': in_progress_work_orders,
+        'completed_work_orders': completed_work_orders,
+        'total_technicians': total_technicians,
+        'operational_equipment': operational_equipment,
+        'maintenance_equipment': maintenance_equipment,
+        'offline_equipment': offline_equipment,
+        'urgent_work_orders': urgent_work_orders,
+        'high_work_orders': high_work_orders,
+        'medium_work_orders': medium_work_orders,
+        'low_work_orders': low_work_orders,
+        'admin_count': admin_count,
+        'manager_count': manager_count,
+        'technician_count': technician_count,
+        'viewer_count': viewer_count,
+        'total_users': total_users,
+        'active_work_orders': open_work_orders + in_progress_work_orders,
+        'system_health': system_health_data['overall_health'],
+        'system_health_data': system_health_data
+    })
 
 @app.route('/api/locations')
 def api_locations():
@@ -1339,6 +1399,10 @@ def login():
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
         if user and user.check_password(form.password.data):
+            # Update last login timestamp
+            user.last_login = datetime.utcnow()
+            db.session.commit()
+            
             login_user(user)
             if user.password_reset_required:
                 flash('You must change your password before continuing.', 'warning')
@@ -1379,6 +1443,10 @@ def login_google():
         )
         db.session.add(user)
         db.session.commit()
+    # Update last login timestamp
+    user.last_login = datetime.utcnow()
+    db.session.commit()
+    
     login_user(user)
     flash('Logged in with Google!', 'success')
     return redirect(url_for('index'))
@@ -1582,12 +1650,12 @@ def maps():
 @app.route('/equipment/<int:id>/maintenance-schedule/new', methods=['GET', 'POST'])
 @login_required
 def maintenance_schedule_new(id):
-    equipment = Equipment.query.get_or_404(id)
+    equipment = filter_by_company(Equipment.query).filter_by(id=id).first_or_404()
     form = MaintenanceScheduleForm()
     
-    # Populate form choices
-    form.sop_id.choices = [(0, '-- Select SOP --')] + [(s.id, s.name) for s in SOP.query.filter_by(is_active=True).order_by(SOP.name).all()]
-    form.assigned_team_id.choices = [(0, '-- Select Team --')] + [(t.id, t.name) for t in Team.query.order_by(Team.name).all()]
+    # Populate form choices with company filtering
+    form.sop_id.choices = [(0, '-- Select SOP --')] + [(s.id, s.name) for s in filter_by_company(SOP.query).filter_by(is_active=True).order_by(SOP.name).all()]
+    form.assigned_team_id.choices = [(0, '-- Select Team --')] + [(t.id, t.name) for t in filter_by_company(Team.query).order_by(Team.name).all()]
     
     if form.validate_on_submit():
         schedule = MaintenanceSchedule(
@@ -1610,13 +1678,13 @@ def maintenance_schedule_new(id):
 @app.route('/equipment/<int:id>/maintenance-schedule/<int:schedule_id>/edit', methods=['GET', 'POST'])
 @login_required
 def maintenance_schedule_edit(id, schedule_id):
-    equipment = Equipment.query.get_or_404(id)
-    schedule = MaintenanceSchedule.query.get_or_404(schedule_id)
+    equipment = filter_by_company(Equipment.query).filter_by(id=id).first_or_404()
+    schedule = filter_by_company(MaintenanceSchedule.query).filter_by(id=schedule_id).first_or_404()
     form = MaintenanceScheduleForm(obj=schedule)
     
-    # Populate form choices
-    form.sop_id.choices = [(0, '-- Select SOP --')] + [(s.id, s.name) for s in SOP.query.filter_by(is_active=True).order_by(SOP.name).all()]
-    form.assigned_team_id.choices = [(0, '-- Select Team --')] + [(t.id, t.name) for t in Team.query.order_by(Team.name).all()]
+    # Populate form choices with company filtering
+    form.sop_id.choices = [(0, '-- Select SOP --')] + [(s.id, s.name) for s in filter_by_company(SOP.query).filter_by(is_active=True).order_by(SOP.name).all()]
+    form.assigned_team_id.choices = [(0, '-- Select Team --')] + [(t.id, t.name) for t in filter_by_company(Team.query).order_by(Team.name).all()]
     
     if form.validate_on_submit():
         schedule.frequency = form.frequency.data
@@ -1635,8 +1703,8 @@ def maintenance_schedule_edit(id, schedule_id):
 @app.route('/equipment/<int:id>/maintenance-schedule/<int:schedule_id>/delete', methods=['POST'])
 @login_required
 def maintenance_schedule_delete(id, schedule_id):
-    equipment = Equipment.query.get_or_404(id)
-    schedule = MaintenanceSchedule.query.get_or_404(schedule_id)
+    equipment = filter_by_company(Equipment.query).filter_by(id=id).first_or_404()
+    schedule = filter_by_company(MaintenanceSchedule.query).filter_by(id=schedule_id).first_or_404()
     db.session.delete(schedule)
     db.session.commit()
     flash('Maintenance schedule deleted!', 'success')
@@ -2057,6 +2125,10 @@ def mobile_login():
         
         user = User.query.filter_by(email=email).first()
         if user and user.check_password(password):
+            # Update last login timestamp
+            user.last_login = datetime.utcnow()
+            db.session.commit()
+            
             login_user(user, remember=True)
             return redirect(url_for('mobile_dashboard'))
         else:
@@ -2665,8 +2737,8 @@ def equipment_analytics():
     equipment_id = request.args.get('equipment_id')
     
     if equipment_id:
-        equipment = Equipment.query.get_or_404(equipment_id)
-        work_orders = WorkOrder.query.filter_by(equipment_id=equipment_id).order_by(WorkOrder.created_at.desc()).all()
+        equipment = filter_by_company(Equipment.query).filter_by(id=equipment_id).first_or_404()
+        work_orders = filter_by_company(WorkOrder.query).filter_by(equipment_id=equipment_id).order_by(WorkOrder.created_at.desc()).all()
         
         # Calculate equipment metrics
         total_tasks = len(work_orders)
@@ -2699,11 +2771,11 @@ def equipment_analytics():
                              priority_breakdown=priority_breakdown)
     
     # List all equipment with basic stats
-    equipment_list = Equipment.query.all()
+    equipment_list = filter_by_company(Equipment.query).all()
     equipment_stats = []
     
     for equipment in equipment_list:
-        work_orders = WorkOrder.query.filter_by(equipment_id=equipment.id).all()
+        work_orders = filter_by_company(WorkOrder.query).filter_by(equipment_id=equipment.id).all()
         total = len(work_orders)
         completed = len([wo for wo in work_orders if wo.status == 'completed'])
         on_time = len([wo for wo in work_orders if wo.status == 'completed' and wo.actual_end_time and wo.due_date and wo.actual_end_time <= wo.due_date])
@@ -2729,42 +2801,67 @@ def admin_dashboard():
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('dashboard'))
     
-    # Get overview statistics
-    total_equipment = Equipment.query.count()
-    total_work_orders = WorkOrder.query.count()
-    open_work_orders = WorkOrder.query.filter_by(status='open').count()
-    in_progress_work_orders = WorkOrder.query.filter_by(status='in_progress').count()
-    completed_work_orders = WorkOrder.query.filter_by(status='completed').count()
-    total_technicians = User.query.filter_by(role='technician').count()
+    # Get overview statistics with proper company filtering
+    total_equipment = filter_by_company(Equipment.query).count()
+    total_work_orders = filter_by_company(WorkOrder.query).count()
+    open_work_orders = filter_by_company(WorkOrder.query).filter_by(status='open').count()
+    in_progress_work_orders = filter_by_company(WorkOrder.query).filter_by(status='in_progress').count()
+    completed_work_orders = filter_by_company(WorkOrder.query).filter_by(status='completed').count()
+    total_technicians = filter_by_company(User.query).filter_by(role='technician').count()
     
-    # Get recent activity
-    recent_work_orders = WorkOrder.query.order_by(WorkOrder.created_at.desc()).limit(10).all()
-    recent_equipment = Equipment.query.order_by(Equipment.created_at.desc()).limit(5).all()
+    # Get recent activity with proper company filtering
+    recent_work_orders = filter_by_company(WorkOrder.query).order_by(WorkOrder.created_at.desc()).limit(10).all()
+    recent_equipment = filter_by_company(Equipment.query).order_by(Equipment.created_at.desc()).limit(5).all()
     
     # Get equipment by status (operational, maintenance, offline)
-    operational_equipment = Equipment.query.filter_by(status='operational').count()
-    maintenance_equipment = Equipment.query.filter_by(status='maintenance').count()
-    offline_equipment = Equipment.query.filter_by(status='offline').count()
+    operational_equipment = filter_by_company(Equipment.query).filter_by(status='operational').count()
+    maintenance_equipment = filter_by_company(Equipment.query).filter_by(status='maintenance').count()
+    offline_equipment = filter_by_company(Equipment.query).filter_by(status='offline').count()
     
     # Get work orders by priority
-    urgent_work_orders = WorkOrder.query.filter_by(priority='urgent').count()
-    high_work_orders = WorkOrder.query.filter_by(priority='high').count()
-    medium_work_orders = WorkOrder.query.filter_by(priority='medium').count()
-    low_work_orders = WorkOrder.query.filter_by(priority='low').count()
+    urgent_work_orders = filter_by_company(WorkOrder.query).filter_by(priority='urgent').count()
+    high_work_orders = filter_by_company(WorkOrder.query).filter_by(priority='high').count()
+    medium_work_orders = filter_by_company(WorkOrder.query).filter_by(priority='medium').count()
+    low_work_orders = filter_by_company(WorkOrder.query).filter_by(priority='low').count()
 
     # Calculate real system health
     system_health_data = calculate_system_health()
     system_health = system_health_data['overall_health']
     
-    # Get user counts by role
-    admin_count = User.query.filter_by(role='admin').count()
-    manager_count = User.query.filter_by(role='manager').count()
-    technician_count = User.query.filter_by(role='technician').count()
-    viewer_count = User.query.filter_by(role='viewer').count()
+    # Get user counts by role with proper company filtering
+    admin_count = filter_by_company(User.query).filter_by(role='admin').count()
+    manager_count = filter_by_company(User.query).filter_by(role='manager').count()
+    technician_count = filter_by_company(User.query).filter_by(role='technician').count()
+    viewer_count = filter_by_company(User.query).filter_by(role='viewer').count()
     
     # Get total users for the company
     total_users = filter_by_company(User.query).count()
     active_work_orders = open_work_orders + in_progress_work_orders
+    
+    # Create recent activities from work orders and equipment
+    recent_activities = []
+    
+    # Add recent work order activities
+    for work_order in recent_work_orders[:5]:
+        recent_activities.append({
+            'user': work_order.assigned_technician or work_order.created_by,
+            'action_type': 'create' if work_order.status == 'open' else 'update',
+            'description': f"Work Order: {work_order.title}",
+            'timestamp': work_order.created_at
+        })
+    
+    # Add recent equipment activities
+    for equipment in recent_equipment[:3]:
+        recent_activities.append({
+            'user': equipment.created_by,
+            'action_type': 'create',
+            'description': f"Equipment: {equipment.name}",
+            'timestamp': equipment.created_at
+        })
+    
+    # Sort activities by timestamp (most recent first)
+    recent_activities.sort(key=lambda x: x['timestamp'], reverse=True)
+    recent_activities = recent_activities[:8]  # Limit to 8 most recent activities
 
     return render_template('admin/dashboard.html',
                          total_equipment=total_equipment,
@@ -2789,47 +2886,43 @@ def admin_dashboard():
                          technician_count=technician_count,
                          viewer_count=viewer_count,
                          total_users=total_users,
-                         active_work_orders=active_work_orders)
+                         active_work_orders=active_work_orders,
+                         recent_activities=recent_activities)
 
-@app.route('/admin/assets')
+
+@app.route('/admin/asset-management')
 @login_required
-def admin_assets():
+def admin_asset_management():
+    """Admin asset management page combining equipment and inventory"""
+    # Check if user has admin privileges
     if current_user.role not in ['admin', 'manager']:
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('dashboard'))
-    status_filter = request.args.get('status', 'all')
-    location_filter = request.args.get('location', 'all')
-    type_filter = request.args.get('type', 'all')
-    search_query = request.args.get('search', '')
-    query = filter_by_company(Equipment.query)
-    if status_filter != 'all':
-        query = query.filter(Equipment.status == status_filter)
-    if location_filter != 'all':
-        query = query.filter(Equipment.location == location_filter)
-    if type_filter != 'all':
-        query = query.filter(Equipment.type == type_filter)
-    if search_query:
-        query = query.filter(
-            db.or_(
-                Equipment.name.contains(search_query),
-                Equipment.model.contains(search_query),
-                Equipment.serial_number.contains(search_query),
-                Equipment.location.contains(search_query)
-            )
-        )
-    equipment_list = query.order_by(Equipment.name).all()
-    locations = query.with_entities(Equipment.location).distinct().all()
-    equipment_types = query.with_entities(Equipment.type).distinct().all()
-    return render_template('admin/assets.html',
-                         equipment_list=equipment_list,
-                         locations=[loc[0] for loc in locations if loc[0]],
-                         equipment_types=[type[0] for type in equipment_types if type[0]],
-                         filters={
-                             'status': status_filter,
-                             'location': location_filter,
-                             'type': type_filter,
-                             'search': search_query
-                         })
+    
+    # Get equipment data with company filtering
+    equipment = filter_by_company(Equipment.query).order_by(Equipment.name).all()
+    
+    # Get inventory data with company filtering
+    inventory = filter_by_company(Inventory.query).order_by(Inventory.name).all()
+    
+    # Get statistics
+    total_equipment = len(equipment)
+    total_inventory = len(inventory)
+    operational_equipment = len([eq for eq in equipment if eq.status == 'operational'])
+    maintenance_equipment = len([eq for eq in equipment if eq.status == 'maintenance'])
+    offline_equipment = len([eq for eq in equipment if eq.status == 'offline'])
+    low_stock_items = len([inv for inv in inventory if inv.current_stock <= inv.minimum_stock])
+    
+    return render_template('admin/asset_management.html',
+                         equipment=equipment,
+                         inventory=inventory,
+                         total_equipment=total_equipment,
+                         total_inventory=total_inventory,
+                         operational_equipment=operational_equipment,
+                         maintenance_equipment=maintenance_equipment,
+                         offline_equipment=offline_equipment,
+                         low_stock_items=low_stock_items)
+
 
 @app.route('/admin/work-orders')
 @login_required
@@ -2903,8 +2996,8 @@ def admin_technicians():
     team_filter = request.args.get('team_id', 'all')
     search_query = request.args.get('search', '')
     
-    # Build query
-    query = User.query.filter_by(role='technician')
+    # Build query with company filtering
+    query = filter_by_company(User.query).filter_by(role='technician')
     
     if status_filter == 'active':
         query = query.filter(User.is_active == True)
@@ -2927,7 +3020,7 @@ def admin_technicians():
     # Get technician performance stats
     technician_stats = []
     for tech in technicians:
-        work_orders = WorkOrder.query.filter_by(assigned_technician_id=tech.id).all()
+        work_orders = filter_by_company(WorkOrder.query).filter_by(assigned_technician_id=tech.id).all()
         total_tasks = len(work_orders)
         completed_tasks = len([wo for wo in work_orders if wo.status == 'completed'])
         on_time_tasks = len([wo for wo in work_orders if wo.status == 'completed' and wo.actual_end_time and wo.due_date and wo.actual_end_time <= wo.due_date])
@@ -2941,8 +3034,8 @@ def admin_technicians():
             'on_time_rate': (on_time_tasks / completed_tasks * 100) if completed_tasks > 0 else 0
         })
     
-    # Get filter options
-    teams = Team.query.all()
+    # Get filter options with company filtering
+    teams = filter_by_company(Team.query).all()
     
     return render_template('admin/technicians.html',
                          technician_stats=technician_stats,
@@ -2980,15 +3073,15 @@ def admin_bulk_assign():
         flash('Please select work orders and a technician.', 'error')
         return redirect(url_for('admin_work_orders'))
     
-    technician = User.query.get(technician_id)
-    if not technician or technician.role != 'technician':
+    technician = filter_by_company(User.query).filter_by(id=technician_id, role='technician').first()
+    if not technician:
         flash('Invalid technician selected.', 'error')
         return redirect(url_for('admin_work_orders'))
     
     # Update work orders
     updated_count = 0
     for work_order_id in work_order_ids:
-        work_order = WorkOrder.query.get(work_order_id)
+        work_order = filter_by_company(WorkOrder.query).filter_by(id=work_order_id).first()
         if work_order:
             work_order.assigned_technician_id = technician_id
             updated_count += 1
@@ -3017,7 +3110,7 @@ def admin_bulk_status():
     # Update work orders
     updated_count = 0
     for work_order_id in work_order_ids:
-        work_order = WorkOrder.query.get(work_order_id)
+        work_order = filter_by_company(WorkOrder.query).filter_by(id=work_order_id).first()
         if work_order:
             work_order.status = new_status
             if new_status == 'in_progress' and not work_order.actual_start_time:
@@ -3038,25 +3131,25 @@ def admin_equipment_status():
     # Check if user has admin privileges
     if current_user.role not in ['admin', 'manager']:
         flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('admin_assets'))
+        return redirect(url_for('admin_dashboard'))
     
     equipment_id = request.form.get('equipment_id')
     new_status = request.form.get('new_status')
     
     if not equipment_id or not new_status:
         flash('Please select equipment and a new status.', 'error')
-        return redirect(url_for('admin_assets'))
+        return redirect(url_for('admin_dashboard'))
     
-    equipment = Equipment.query.get(equipment_id)
+    equipment = filter_by_company(Equipment.query).filter_by(id=equipment_id).first()
     if not equipment:
         flash('Equipment not found.', 'error')
-        return redirect(url_for('admin_assets'))
+        return redirect(url_for('admin_dashboard'))
     
     equipment.status = new_status
     db.session.commit()
     flash(f'Equipment {equipment.name} status updated to {new_status.title()}.', 'success')
     
-    return redirect(url_for('admin_assets'))
+    return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/analytics')
 @login_required
@@ -3138,10 +3231,178 @@ def admin_analytics():
 def admin_users():
     if not user_has_permission(current_user, 'user_view'):
         abort(403)
-    users = filter_by_company(User.query).all()
-    roles = [r.name for r in filter_by_company(Role.query).filter_by(is_active=True).all()]
+    
+    # Get filter parameters
+    search = request.args.get('search', '').strip()
+    role_filter = request.args.get('role', '').strip()
+    status_filter = request.args.get('status', '').strip()
+    department_filter = request.args.get('department', '').strip()
+    last_login_filter = request.args.get('last_login', '').strip()
+    created_date_filter = request.args.get('created_date', '').strip()
+    sort_by = request.args.get('sort', 'created_at')
+    sort_order = request.args.get('order', 'desc')
+    
+    # Start with base query
+    query = filter_by_company(User.query).options(db.joinedload(User.role_info))
+    
+    # Apply search filter with enhanced search capabilities
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            db.or_(
+                User.first_name.ilike(search_term),
+                User.last_name.ilike(search_term),
+                User.email.ilike(search_term),
+                User.username.ilike(search_term),
+                User.phone.ilike(search_term),
+                User.department.ilike(search_term)
+            )
+        )
+    
+    # Apply role filter (check both role and role_id)
+    if role_filter:
+        query = query.filter(
+            db.or_(
+                User.role == role_filter,
+                User.role_id == db.session.query(Role.id).filter_by(name=role_filter, company_id=current_user.company_id).scalar()
+            )
+        )
+    
+    # Apply status filter
+    if status_filter:
+        if status_filter == 'active':
+            query = query.filter(User.is_active == True)
+        elif status_filter == 'inactive':
+            query = query.filter(User.is_active == False)
+    
+    # Apply department filter
+    if department_filter:
+        query = query.filter(User.department == department_filter)
+    
+    # Apply last login filter
+    if last_login_filter:
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        if last_login_filter == 'today':
+            query = query.filter(User.last_login >= now.date())
+        elif last_login_filter == 'week':
+            query = query.filter(User.last_login >= now - timedelta(days=7))
+        elif last_login_filter == 'month':
+            query = query.filter(User.last_login >= now - timedelta(days=30))
+        elif last_login_filter == 'never':
+            query = query.filter(User.last_login.is_(None))
+    
+    # Apply created date filter
+    if created_date_filter:
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        if created_date_filter == 'today':
+            query = query.filter(User.created_at >= now.date())
+        elif created_date_filter == 'week':
+            query = query.filter(User.created_at >= now - timedelta(days=7))
+        elif created_date_filter == 'month':
+            query = query.filter(User.created_at >= now - timedelta(days=30))
+        elif created_date_filter == 'year':
+            query = query.filter(User.created_at >= now - timedelta(days=365))
+    
+    # Apply sorting
+    if sort_by == 'name':
+        if sort_order == 'asc':
+            query = query.order_by(User.first_name.asc(), User.last_name.asc())
+        else:
+            query = query.order_by(User.first_name.desc(), User.last_name.desc())
+    elif sort_by == 'email':
+        if sort_order == 'asc':
+            query = query.order_by(User.email.asc())
+        else:
+            query = query.order_by(User.email.desc())
+    elif sort_by == 'role':
+        if sort_order == 'asc':
+            query = query.order_by(User.role.asc())
+        else:
+            query = query.order_by(User.role.desc())
+    elif sort_by == 'department':
+        if sort_order == 'asc':
+            query = query.order_by(User.department.asc())
+        else:
+            query = query.order_by(User.department.desc())
+    elif sort_by == 'last_login':
+        if sort_order == 'asc':
+            query = query.order_by(User.last_login.asc().nullslast())
+        else:
+            query = query.order_by(User.last_login.desc().nullslast())
+    else:  # default: created_at
+        if sort_order == 'asc':
+            query = query.order_by(User.created_at.asc())
+        else:
+            query = query.order_by(User.created_at.desc())
+    
+    # Execute query
+    users = query.all()
+    
+    # Get roles and departments for filter dropdowns
+    roles = filter_by_company(Role.query).filter_by(is_active=True).all()
     departments = [d.name for d in Department.query.filter_by(company_id=current_user.company_id, is_active=True).all()]
-    return render_template('admin/users.html', users=users, roles=roles, departments=departments)
+    
+    # Calculate statistics for filtered results
+    total_users = len(users)
+    active_users = len([u for u in users if u.is_active])
+    inactive_users = total_users - active_users
+    users_with_login = len([u for u in users if u.last_login])
+    users_never_logged = total_users - users_with_login
+    
+    # Check if export is requested
+    if request.args.get('export') == 'csv':
+        import csv
+        from io import StringIO
+        from flask import make_response
+        
+        output = StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow(['ID', 'Username', 'Email', 'First Name', 'Last Name', 'Role', 'Department', 'Phone', 'Status', 'Last Login', 'Created At'])
+        
+        # Write data
+        for user in users:
+            writer.writerow([
+                user.id,
+                user.username,
+                user.email,
+                user.first_name,
+                user.last_name,
+                user.role,
+                user.department or '',
+                user.phone or '',
+                'Active' if user.is_active else 'Inactive',
+                user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else 'Never',
+                user.created_at.strftime('%Y-%m-%d %H:%M:%S') if user.created_at else ''
+            ])
+        
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename=users_export_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'
+        return response
+    
+    return render_template('admin/users.html', 
+                         users=users, 
+                         roles=roles, 
+                         departments=departments,
+                         search=search,
+                         role_filter=role_filter,
+                         status_filter=status_filter,
+                         department_filter=department_filter,
+                         last_login_filter=last_login_filter,
+                         created_date_filter=created_date_filter,
+                         sort_by=sort_by,
+                         sort_order=sort_order,
+                         total_users=total_users,
+                         active_users=active_users,
+                         inactive_users=inactive_users,
+                         users_with_login=users_with_login,
+                         users_never_logged=users_never_logged)
 
 @app.route('/admin/users/create', methods=['POST'])
 @login_required
@@ -3179,6 +3440,7 @@ def admin_create_user():
         last_name=data['last_name'],
         role=data['role'],
         role_id=role.id,  # <-- set role_id for permission system
+        company_id=current_user.company_id,  # <-- Add company_id
         department=data.get('department'),
         phone=data.get('phone'),
         is_active=data.get('is_active') == 'on'
@@ -3190,37 +3452,6 @@ def admin_create_user():
     
     flash(f'User {user.first_name} {user.last_name} created successfully.', 'success')
     return redirect(url_for('admin_users'))
-
-@app.route('/admin/users/<int:user_id>')
-@login_required
-def admin_get_user(user_id):
-    if not user_has_permission(current_user, 'user_view'):
-        abort(403)
-    """Get user data for editing"""
-    # Check if user has admin privileges
-    if current_user.role not in ['admin', 'manager']:
-        return jsonify({'error': 'Access denied'}), 403
-    
-    user = User.query.get_or_404(user_id)
-    enforce_company_access(user)
-    # Get role display name
-    role_display_name = user.role
-    role_obj = filter_by_company(Role.query).filter_by(name=user.role, is_active=True).first()
-    if role_obj:
-        role_display_name = role_obj.display_name
-    
-    return jsonify({
-        'id': user.id,
-        'username': user.username,
-        'email': user.email,
-        'first_name': user.first_name,
-        'last_name': user.last_name,
-        'role': user.role,
-        'role_display_name': role_display_name,
-        'department': user.department,
-        'phone': user.phone,
-        'is_active': user.is_active
-    })
 
 @app.route('/admin/users/<int:user_id>/update', methods=['POST'])
 @login_required
@@ -3256,7 +3487,43 @@ def admin_update_user(user_id):
     db.session.commit()
     
     flash(f'User {user.first_name} {user.last_name} updated successfully.', 'success')
-    return redirect(url_for('admin_get_user', user_id=user_id))
+    
+    # Check if this is an AJAX request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True, 'message': f'User {user.first_name} {user.last_name} updated successfully.'})
+    else:
+        return redirect(url_for('admin_users')), 302
+
+@app.route('/admin/users/<int:user_id>')
+@login_required
+def admin_get_user(user_id):
+    if not user_has_permission(current_user, 'user_view'):
+        abort(403)
+    """Get user data for editing"""
+    # Check if user has admin privileges
+    if current_user.role not in ['admin', 'manager']:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    user = User.query.get_or_404(user_id)
+    enforce_company_access(user)
+    # Get role display name
+    role_display_name = user.role
+    role_obj = filter_by_company(Role.query).filter_by(name=user.role, is_active=True).first()
+    if role_obj:
+        role_display_name = role_obj.display_name
+    
+    return jsonify({
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'role': user.role,
+        'role_display_name': role_display_name,
+        'department': user.department,
+        'phone': user.phone,
+        'is_active': user.is_active
+    })
 
 @app.route('/admin/users/<int:user_id>/toggle-status', methods=['POST'])
 @login_required
@@ -3352,8 +3619,67 @@ def admin_roles():
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('dashboard'))
     
-    # Get all roles for the current company
-    roles = filter_by_company(Role.query).order_by(Role.name).all()
+    # Get filter parameters
+    search_query = request.args.get('search', '')
+    type_filter = request.args.get('type', '')
+    status_filter = request.args.get('status', '')
+    permission_filter = request.args.get('permission', '')
+    sort_by = request.args.get('sort', 'name')
+    sort_order = request.args.get('order', 'asc')
+    
+    # Build query with proper company filtering
+    query = filter_by_company(Role.query)
+    
+    # Apply search filter
+    if search_query:
+        query = query.filter(
+            db.or_(
+                Role.name.contains(search_query),
+                Role.display_name.contains(search_query),
+                Role.description.contains(search_query)
+            )
+        )
+    
+    # Apply type filter
+    if type_filter == 'system':
+        query = query.filter(Role.is_system_role == True)
+    elif type_filter == 'custom':
+        query = query.filter(Role.is_system_role == False)
+    
+    # Apply status filter
+    if status_filter == 'active':
+        query = query.filter(Role.is_active == True)
+    elif status_filter == 'inactive':
+        query = query.filter(Role.is_active == False)
+    
+    # Apply permission filter
+    if permission_filter:
+        query = query.filter(Role.permissions.contains(permission_filter))
+    
+    # Apply sorting
+    if sort_by == 'name':
+        query = query.order_by(Role.name.asc() if sort_order == 'asc' else Role.name.desc())
+    elif sort_by == 'display_name':
+        query = query.order_by(Role.display_name.asc() if sort_order == 'asc' else Role.display_name.desc())
+    elif sort_by == 'created_at':
+        query = query.order_by(Role.created_at.asc() if sort_order == 'asc' else Role.created_at.desc())
+    else:
+        query = query.order_by(Role.name.asc())
+    
+    roles = query.all()
+    
+    # Get all users for the current company to calculate user counts
+    users = filter_by_company(User.query).all()
+    
+    # Calculate user counts for each role
+    role_user_counts = {}
+    for role in roles:
+        count = 0
+        for user in users:
+            # Check both role_id and role field for compatibility
+            if user.role_id == role.id or user.role == role.name:
+                count += 1
+        role_user_counts[role.id] = count
     
     # Calculate statistics
     active_roles_count = filter_by_company(Role.query).filter_by(is_active=True).count()
@@ -3362,9 +3688,19 @@ def admin_roles():
     
     return render_template('admin/roles.html', 
                          roles=roles,
+                         users=users,
+                         role_user_counts=role_user_counts,
                          active_roles_count=active_roles_count,
                          system_roles_count=system_roles_count,
-                         custom_roles_count=custom_roles_count)
+                         custom_roles_count=custom_roles_count,
+                         filters={
+                             'search': search_query,
+                             'type': type_filter,
+                             'status': status_filter,
+                             'permission': permission_filter,
+                             'sort': sort_by,
+                             'order': sort_order
+                         })
 
 @app.route('/admin/roles/create', methods=['POST'])
 @login_required
@@ -3428,8 +3764,17 @@ def admin_get_role(role_id):
     if not role:
         return jsonify({'success': False, 'message': 'Role not found'}), 404
     
+    # Get users with this role (check both role_id and role field)
+    users = filter_by_company(User.query).filter(
+        db.or_(
+            User.role_id == role_id,
+            User.role == role.name
+        )
+    ).all()
+    
     role_data = role.to_dict()
-    role_data['users_count'] = len(role.users)
+    role_data['users_count'] = len(users)
+    role_data['users'] = [user.to_dict() for user in users]
     
     return jsonify({'success': True, 'role': role_data})
 
@@ -3541,11 +3886,76 @@ def admin_teams():
     if current_user.role not in ['admin', 'manager']:
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('dashboard'))
-    teams = filter_by_company(Team.query).all()
+    
+    # Get filter parameters
+    search_query = request.args.get('search', '')
+    department_filter = request.args.get('department', '')
+    status_filter = request.args.get('status', '')
+    sort_by = request.args.get('sort', 'name')
+    sort_order = request.args.get('order', 'asc')
+    
+    # Build query with proper company filtering
+    query = filter_by_company(Team.query)
+    
+    # Apply search filter
+    if search_query:
+        query = query.filter(
+            db.or_(
+                Team.name.contains(search_query),
+                Team.description.contains(search_query)
+            )
+        )
+    
+    # Apply department filter (if teams have department field)
+    if department_filter:
+        # Note: This assumes teams have a department field or relationship
+        # Adjust based on your actual team model structure
+        pass
+    
+    # Apply status filter
+    if status_filter == 'active':
+        query = query.filter(Team.is_active == True)
+    elif status_filter == 'inactive':
+        query = query.filter(Team.is_active == False)
+    
+    # Apply sorting
+    if sort_by == 'name':
+        query = query.order_by(Team.name.asc() if sort_order == 'asc' else Team.name.desc())
+    elif sort_by == 'created_at':
+        query = query.order_by(Team.created_at.asc() if sort_order == 'asc' else Team.created_at.desc())
+    elif sort_by == 'member_count':
+        # This would require a more complex query with subquery
+        query = query.order_by(Team.created_at.desc())  # Fallback
+    else:
+        query = query.order_by(Team.name.asc())
+    
+    teams = query.all()
     technicians = filter_by_company(User.query).filter_by(role='technician').all()
     departments = [d.name for d in Department.query.filter_by(company_id=current_user.company_id, is_active=True).all()]
     roles = [r.name for r in filter_by_company(Role.query).filter_by(is_active=True).all()]
-    return render_template('admin/teams.html', teams=teams, technicians=technicians, departments=departments, roles=roles)
+    
+    # Calculate statistics
+    total_teams = len(teams)
+    active_teams = len([t for t in teams if t.is_active])
+    total_members = sum(len(t.members) for t in teams)
+    available_technicians = len(technicians)
+    
+    return render_template('admin/teams.html', 
+                         teams=teams, 
+                         technicians=technicians, 
+                         departments=departments, 
+                         roles=roles,
+                         total_teams=total_teams,
+                         active_teams=active_teams,
+                         total_members=total_members,
+                         available_technicians=available_technicians,
+                         filters={
+                             'search': search_query,
+                             'department': department_filter,
+                             'status': status_filter,
+                             'sort': sort_by,
+                             'order': sort_order
+                         })
 
 @app.route('/admin/teams/create', methods=['POST'])
 @login_required
@@ -3895,56 +4305,7 @@ def admin_remove_team_member(team_id):
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
 
-@app.route('/admin/equipment')
-@login_required
-def admin_equipment():
-    """Admin equipment management"""
-    # Check if user has admin privileges
-    if current_user.role not in ['admin', 'manager']:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    # Get filter parameters
-    status_filter = request.args.get('status', 'all')
-    location_filter = request.args.get('location', 'all')
-    type_filter = request.args.get('type', 'all')
-    search_query = request.args.get('search', '')
-    
-    # Build query
-    query = Equipment.query
-    
-    if status_filter != 'all':
-        query = query.filter(Equipment.status == status_filter)
-    if location_filter != 'all':
-        query = query.filter(Equipment.location == location_filter)
-    if type_filter != 'all':
-        query = query.filter(Equipment.type == type_filter)
-    if search_query:
-        query = query.filter(
-            db.or_(
-                Equipment.name.contains(search_query),
-                Equipment.model.contains(search_query),
-                Equipment.serial_number.contains(search_query),
-                Equipment.location.contains(search_query)
-            )
-        )
-    
-    equipment_list = query.order_by(Equipment.name).all()
-    
-    # Get filter options
-    locations = db.session.query(Equipment.location).distinct().all()
-    equipment_types = db.session.query(Equipment.type).distinct().all()
-    
-    return render_template('admin/assets.html',
-                         equipment_list=equipment_list,
-                         locations=[loc[0] for loc in locations if loc[0]],
-                         equipment_types=[type[0] for type in equipment_types if type[0]],
-                         filters={
-                             'status': status_filter,
-                             'location': location_filter,
-                             'type': type_filter,
-                             'search': search_query
-                         })
+
 
 @app.route('/admin/settings')
 @login_required
@@ -4000,324 +4361,309 @@ def admin_save_notification_settings():
 @login_required
 def admin_bulk_equipment_status():
     """Bulk update equipment status"""
-    # Check if user has admin privileges
     if current_user.role not in ['admin', 'manager']:
         return jsonify({'success': False, 'message': 'Access denied'}), 403
     
-    equipment_ids = request.form.getlist('equipment_ids')
-    new_status = request.form.get('new_status')
+    data = request.get_json()
+    equipment_ids = data.get('equipment_ids', [])
+    new_status = data.get('status', 'operational')
     
-    if not equipment_ids or not new_status:
-        return jsonify({'success': False, 'message': 'Please select equipment and a new status'}), 400
+    if not equipment_ids:
+        return jsonify({'success': False, 'message': 'No equipment selected'}), 400
     
-    # Update equipment status
-    updated_count = 0
-    for equipment_id in equipment_ids:
-        equipment = Equipment.query.get(equipment_id)
-        if equipment:
-            equipment.status = new_status
-            updated_count += 1
-    
-    db.session.commit()
-    
-    return jsonify({
-        'success': True, 
-        'message': f'Successfully updated status for {updated_count} equipment items to {new_status.title()}'
-    })
+    try:
+        updated_count = 0
+        for equipment_id in equipment_ids:
+            equipment = filter_by_company(Equipment.query).filter_by(id=equipment_id).first()
+            if equipment:
+                equipment.status = new_status
+                equipment.updated_at = datetime.utcnow()
+                updated_count += 1
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Successfully updated status for {updated_count} equipment items to {new_status.title()}'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Error updating equipment status: {str(e)}'}), 500
 
-# Quick Assets Routes
-@app.route('/quick-assets')
+@app.route('/quick-asset-registry')
 @login_required
-def quick_assets():
-    """Quick Asset Registry - Main view"""
+def quick_asset_registry():
+    """Quick Asset Registry - Unified view of equipment and inventory"""
     # Check if user has admin/manager privileges
     if current_user.role not in ['admin', 'manager']:
         flash('Access denied. Admin/Manager privileges required.', 'error')
         return redirect(url_for('dashboard'))
     
     # Get filter parameters
+    asset_type = request.args.get('type', 'all')  # equipment, inventory, all
     category_filter = request.args.get('category', 'all')
-    department_filter = request.args.get('department', 'all')
     location_filter = request.args.get('location', 'all')
     status_filter = request.args.get('status', 'all')
     search_query = request.args.get('search', '')
-    tag_filter = request.args.get('tag', '')
     
-    # Build query
-    query = Equipment.query
-    
+    # Get equipment data
+    equipment_query = filter_by_company(Equipment.query)
     if category_filter != 'all':
-        query = query.filter(Equipment.category == category_filter)
-    if department_filter != 'all':
-        query = query.filter(Equipment.department == department_filter)
+        equipment_query = equipment_query.filter(Equipment.category == category_filter)
     if location_filter != 'all':
-        query = query.filter(Equipment.location == location_filter)
+        equipment_query = equipment_query.filter(Equipment.location == location_filter)
     if status_filter != 'all':
-        query = query.filter(Equipment.status == status_filter)
+        equipment_query = equipment_query.filter(Equipment.status == status_filter)
     if search_query:
-        query = query.filter(
+        equipment_query = equipment_query.filter(
             db.or_(
                 Equipment.name.contains(search_query),
                 Equipment.equipment_id.contains(search_query),
-                Equipment.serial_number.contains(search_query),
-                Equipment.manufacturer.contains(search_query),
-                Equipment.model.contains(search_query)
+                Equipment.serial_number.contains(search_query)
             )
         )
-    if tag_filter:
-        query = query.filter(Equipment.tags.contains(tag_filter))
+    equipment_list = equipment_query.order_by(Equipment.name).all()
     
-    equipment_list = query.order_by(Equipment.name).all()
+    # Get inventory data
+    inventory_query = filter_by_company(Inventory.query)
+    if category_filter != 'all':
+        inventory_query = inventory_query.filter(Inventory.category == category_filter)
+    if location_filter != 'all':
+        inventory_query = inventory_query.filter(Inventory.location == location_filter)
+    if status_filter != 'all':
+        if status_filter == 'active':
+            inventory_query = inventory_query.filter(Inventory.is_active == True)
+        elif status_filter == 'inactive':
+            inventory_query = inventory_query.filter(Inventory.is_active == False)
+        elif status_filter == 'low_stock':
+            inventory_query = inventory_query.filter(Inventory.current_stock <= Inventory.minimum_stock)
+    if search_query:
+        inventory_query = inventory_query.filter(
+            db.or_(
+                Inventory.name.contains(search_query),
+                Inventory.part_number.contains(search_query),
+                Inventory.description.contains(search_query)
+            )
+        )
+    inventory_list = inventory_query.order_by(Inventory.name).all()
+    
+    # Combine and format data for unified view
+    unified_assets = []
+    
+    # Add equipment items
+    for eq in equipment_list:
+        if asset_type in ['all', 'equipment']:
+            unified_assets.append({
+                'id': eq.id,
+                'type': 'equipment',
+                'name': eq.name,
+                'identifier': eq.equipment_id,
+                'category': eq.category,
+                'location': eq.location,
+                'status': eq.status,
+                'criticality': eq.criticality,
+                'manufacturer': eq.manufacturer,
+                'model': eq.model,
+                'serial_number': eq.serial_number,
+                'created_at': eq.created_at,
+                'stock_level': None,
+                'unit_cost': None,
+                'is_active': True
+            })
+    
+    # Add inventory items
+    for inv in inventory_list:
+        if asset_type in ['all', 'inventory']:
+            unified_assets.append({
+                'id': inv.id,
+                'type': 'inventory',
+                'name': inv.name,
+                'identifier': inv.part_number,
+                'category': inv.category,
+                'location': inv.location,
+                'status': 'active' if inv.is_active else 'inactive',
+                'criticality': None,
+                'manufacturer': None,
+                'model': None,
+                'serial_number': None,
+                'created_at': inv.created_at,
+                'stock_level': inv.current_stock,
+                'unit_cost': inv.unit_cost,
+                'is_active': inv.is_active
+            })
+    
+    # Sort by name
+    unified_assets.sort(key=lambda x: x['name'])
     
     # Get filter options
-    categories = db.session.query(Equipment.category).distinct().all()
-    departments = db.session.query(Equipment.department).distinct().all()
-    locations = db.session.query(Equipment.location).distinct().all()
-    statuses = ['operational', 'maintenance', 'offline', 'out_of_service']
+    equipment_categories = db.session.query(Equipment.category).distinct().all()
+    inventory_categories = db.session.query(Inventory.category).distinct().all()
+    all_categories = list(set([cat[0] for cat in equipment_categories + inventory_categories if cat[0]]))
     
-    # Extract tags from all equipment
-    all_tags = set()
-    for equipment in Equipment.query.all():
-        if equipment.tags:
-            tags = [tag.strip() for tag in equipment.tags.split(',') if tag.strip()]
-            all_tags.update(tags)
+    equipment_locations = db.session.query(Equipment.location).distinct().all()
+    inventory_locations = db.session.query(Inventory.location).distinct().all()
+    all_locations = list(set([loc[0] for loc in equipment_locations + inventory_locations if loc[0]]))
     
-    # Build filtered_args for tag filter links
-    filtered_args = {k: v for k, v in request.args.items() if k != 'tag'}
-
-    return render_template('quick_assets/index.html',
-                         equipment_list=equipment_list,
-                         categories=[cat[0] for cat in categories if cat[0]],
-                         departments=[dept[0] for dept in departments if dept[0]],
-                         locations=[loc[0] for loc in locations if loc[0]],
-                         statuses=statuses,
-                         all_tags=sorted(all_tags),
+    return render_template('quick_asset_registry.html',
+                         assets=unified_assets,
+                         categories=all_categories,
+                         locations=all_locations,
                          filters={
+                             'type': asset_type,
                              'category': category_filter,
-                             'department': department_filter,
                              'location': location_filter,
                              'status': status_filter,
-                             'search': search_query,
-                             'tag': tag_filter
-                         },
-                         filtered_args=filtered_args)
+                             'search': search_query
+                         })
 
-@app.route('/quick-assets/add', methods=['GET', 'POST'])
+
+@app.route('/quick-asset-registry', methods=['POST'])
 @login_required
-def quick_assets_add():
-    """Quick Add Asset"""
-    # Check if user has admin/manager privileges
+def quick_asset_registry_add():
+    """Quick add asset to registry"""
     if current_user.role not in ['admin', 'manager']:
         flash('Access denied. Admin/Manager privileges required.', 'error')
         return redirect(url_for('dashboard'))
     
-    if request.method == 'POST':
-        data = request.form
+    try:
+        asset_type = request.form.get('asset_type')
+        name = request.form.get('name')
+        identifier = request.form.get('identifier')
+        category = request.form.get('category')
+        location = request.form.get('location')
+        description = request.form.get('description')
         
-        # Generate unique equipment ID if not provided
-        equipment_id = data.get('equipment_id')
-        if not equipment_id:
-            equipment_id = f"EQ-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+        if asset_type == 'equipment':
+            equipment = Equipment(
+                name=name,
+                equipment_id=identifier,
+                category=category,
+                location=location,
+                description=description,
+                status=request.form.get('status', 'operational'),
+                manufacturer=request.form.get('manufacturer'),
+                model=request.form.get('model'),
+                serial_number=request.form.get('serial_number'),
+                criticality=request.form.get('criticality', 'medium'),
+                created_by_id=current_user.id,
+                company_id=current_user.company_id
+            )
+            db.session.add(equipment)
+            flash(f'Equipment "{name}" added successfully!', 'success')
+            
+        elif asset_type == 'inventory':
+            inventory = Inventory(
+                name=name,
+                part_number=identifier,
+                category=category,
+                location=location,
+                description=description,
+                current_stock=int(request.form.get('current_stock', 0)),
+                minimum_stock=int(request.form.get('minimum_stock', 0)),
+                unit_cost=float(request.form.get('unit_cost', 0)) if request.form.get('unit_cost') else None,
+                unit_of_measure=request.form.get('unit_of_measure', 'pieces'),
+                is_active=request.form.get('is_active') == 'true',
+                created_by_id=current_user.id,
+                company_id=current_user.company_id
+            )
+            db.session.add(inventory)
+            flash(f'Inventory item "{name}" added successfully!', 'success')
         
-        # Create equipment
-        equipment = Equipment(
-            name=data['name'],
-            equipment_id=equipment_id,
-            category=data['category'],
-            manufacturer=data.get('manufacturer'),
-            model=data.get('model'),
-            serial_number=data.get('serial_number'),
-            location=data.get('location'),
-            department=data.get('department'),
-            tags=data.get('tags'),
-            description=data.get('description'),
-            status=data.get('status', 'operational'),
-            criticality=data.get('criticality', 'medium'),
-            company_id=current_user.company_id  # <-- Add this line
+        db.session.commit()
+        return redirect(url_for('quick_asset_registry'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error adding asset: {str(e)}', 'error')
+        return redirect(url_for('quick_asset_registry'))
+
+
+@app.route('/quick-asset-registry/export')
+@login_required
+def quick_asset_registry_export():
+    """Export assets to CSV"""
+    if current_user.role not in ['admin', 'manager']:
+        flash('Access denied. Admin/Manager privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Get filter parameters
+    asset_type = request.args.get('type', 'all')
+    category_filter = request.args.get('category', 'all')
+    location_filter = request.args.get('location', 'all')
+    status_filter = request.args.get('status', 'all')
+    search_query = request.args.get('search', '')
+    
+    # Get filtered data (same logic as main route)
+    equipment_query = filter_by_company(Equipment.query)
+    inventory_query = filter_by_company(Inventory.query)
+    
+    # Apply filters
+    if category_filter != 'all':
+        equipment_query = equipment_query.filter(Equipment.category == category_filter)
+        inventory_query = inventory_query.filter(Inventory.category == category_filter)
+    if location_filter != 'all':
+        equipment_query = equipment_query.filter(Equipment.location == location_filter)
+        inventory_query = inventory_query.filter(Inventory.location == location_filter)
+    if status_filter != 'all':
+        if status_filter in ['operational', 'maintenance', 'offline']:
+            equipment_query = equipment_query.filter(Equipment.status == status_filter)
+        elif status_filter == 'active':
+            inventory_query = inventory_query.filter(Inventory.is_active == True)
+        elif status_filter == 'inactive':
+            inventory_query = inventory_query.filter(Inventory.is_active == False)
+        elif status_filter == 'low_stock':
+            inventory_query = inventory_query.filter(Inventory.current_stock <= Inventory.minimum_stock)
+    
+    if search_query:
+        equipment_query = equipment_query.filter(
+            db.or_(
+                Equipment.name.contains(search_query),
+                Equipment.equipment_id.contains(search_query),
+                Equipment.serial_number.contains(search_query)
+            )
         )
-        
-        db.session.add(equipment)
-        db.session.commit()
-        
-        flash('Asset added successfully!', 'success')
-        return redirect(url_for('quick_assets'))
+        inventory_query = inventory_query.filter(
+            db.or_(
+                Inventory.name.contains(search_query),
+                Inventory.part_number.contains(search_query),
+                Inventory.description.contains(search_query)
+            )
+        )
     
-    # Get existing data for autocomplete
-    categories = db.session.query(Equipment.category).distinct().all()
-    departments = db.session.query(Equipment.department).distinct().all()
-    locations = db.session.query(Equipment.location).distinct().all()
+    equipment_list = equipment_query.all()
+    inventory_list = inventory_query.all()
     
-    return render_template('quick_assets/add.html',
-                         categories=[cat[0] for cat in categories if cat[0]],
-                         departments=[dept[0] for dept in departments if dept[0]],
-                         locations=[loc[0] for loc in locations if loc[0]])
-
-@app.route('/quick-assets/<int:id>/edit', methods=['GET', 'POST'])
-@login_required
-def quick_assets_edit(id):
-    """Quick Edit Asset"""
-    # Check if user has admin/manager privileges
-    if current_user.role not in ['admin', 'manager']:
-        flash('Access denied. Admin/Manager privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    equipment = Equipment.query.get_or_404(id)
-    
-    if request.method == 'POST':
-        data = request.form
-        
-        equipment.name = data['name']
-        equipment.category = data['category']
-        equipment.manufacturer = data.get('manufacturer')
-        equipment.model = data.get('model')
-        equipment.serial_number = data.get('serial_number')
-        equipment.location = data.get('location')
-        equipment.department = data.get('department')
-        equipment.tags = data.get('tags')
-        equipment.description = data.get('description')
-        equipment.status = data.get('status', 'operational')
-        equipment.criticality = data.get('criticality', 'medium')
-        
-        db.session.commit()
-        
-        flash('Asset updated successfully!', 'success')
-        return redirect(url_for('quick_assets'))
-    
-    # Get existing data for autocomplete
-    categories = db.session.query(Equipment.category).distinct().all()
-    departments = db.session.query(Equipment.department).distinct().all()
-    locations = db.session.query(Equipment.location).distinct().all()
-    
-    return render_template('quick_assets/edit.html',
-                         equipment=equipment,
-                         categories=[cat[0] for cat in categories if cat[0]],
-                         departments=[dept[0] for dept in departments if dept[0]],
-                         locations=[loc[0] for loc in locations if loc[0]])
-
-@app.route('/quick-assets/<int:id>/delete', methods=['POST'])
-@login_required
-def quick_assets_delete(id):
-    """Delete Asset"""
-    # Check if user has admin/manager privileges
-    if current_user.role not in ['admin', 'manager']:
-        return jsonify({'success': False, 'message': 'Access denied'}), 403
-    
-    equipment = Equipment.query.get_or_404(id)
-    
-    try:
-        db.session.delete(equipment)
-        db.session.commit()
-        return jsonify({'success': True, 'message': 'Asset deleted successfully'})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'message': 'Error deleting asset'}), 500
-
-@app.route('/quick-assets/bulk-add', methods=['POST'])
-@login_required
-def quick_assets_bulk_add():
-    """Bulk Add Assets from CSV"""
-    # Check if user has admin/manager privileges
-    if current_user.role not in ['admin', 'manager']:
-        return jsonify({'success': False, 'message': 'Access denied'}), 403
-    
-    if 'csv_file' not in request.files:
-        return jsonify({'success': False, 'message': 'No file uploaded'}), 400
-    
-    file = request.files['csv_file']
-    if file.filename == '':
-        return jsonify({'success': False, 'message': 'No file selected'}), 400
-    
-    if not file.filename.endswith('.csv'):
-        return jsonify({'success': False, 'message': 'Please upload a CSV file'}), 400
-    
-    try:
-        # Read CSV file
-        csv_data = file.read().decode('utf-8')
-        csv_reader = csv.DictReader(StringIO(csv_data))
-        
-        added_count = 0
-        errors = []
-        
-        for row in csv_reader:
-            try:
-                # Generate unique equipment ID if not provided
-                equipment_id = row.get('equipment_id')
-                if not equipment_id:
-                    equipment_id = f"EQ-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
-                
-                equipment = Equipment(
-                    name=row['name'],
-                    equipment_id=equipment_id,
-                    category=row.get('category', 'Unknown'),
-                    manufacturer=row.get('manufacturer'),
-                    model=row.get('model'),
-                    serial_number=row.get('serial_number'),
-                    location=row.get('location'),
-                    department=row.get('department'),
-                    tags=row.get('tags'),
-                    description=row.get('description'),
-                    status=row.get('status', 'operational'),
-                    criticality=row.get('criticality', 'medium'),
-                    company_id=current_user.company_id  # <-- Add this line
-                )
-                
-                db.session.add(equipment)
-                added_count += 1
-                
-            except Exception as e:
-                errors.append(f"Row {added_count + 1}: {str(e)}")
-        
-        db.session.commit()
-        
-        message = f"Successfully added {added_count} assets"
-        if errors:
-            message += f". Errors: {', '.join(errors[:5])}"
-        
-        return jsonify({'success': True, 'message': message})
-        
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'message': f'Error processing CSV: {str(e)}'}), 500
-
-@app.route('/quick-assets/export-csv')
-@login_required
-def quick_assets_export_csv():
-    """Export Assets to CSV"""
-    # Check if user has admin/manager privileges
-    if current_user.role not in ['admin', 'manager']:
-        flash('Access denied. Admin/Manager privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    equipment_list = Equipment.query.order_by(Equipment.name).all()
-    
-    # Create CSV data
+    # Create CSV
     output = StringIO()
     writer = csv.writer(output)
     
     # Write header
     writer.writerow([
-        'Name', 'Equipment ID', 'Category', 'Manufacturer', 'Model', 
-        'Serial Number', 'Location', 'Department', 'Tags', 'Status', 
-        'Criticality', 'Description', 'Created At'
+        'Type', 'Name', 'ID/Part Number', 'Category', 'Location', 'Status', 
+        'Manufacturer', 'Model', 'Serial Number', 'Criticality',
+        'Current Stock', 'Minimum Stock', 'Unit Cost', 'Unit of Measure',
+        'Description', 'Created Date'
     ])
     
-    # Write data
-    for equipment in equipment_list:
-        writer.writerow([
-            equipment.name,
-            equipment.equipment_id,
-            equipment.category,
-            equipment.manufacturer or '',
-            equipment.model or '',
-            equipment.serial_number or '',
-            equipment.location or '',
-            equipment.department or '',
-            equipment.tags or '',
-            equipment.status,
-            equipment.criticality,
-            equipment.description or '',
-            equipment.created_at.strftime('%Y-%m-%d %H:%M:%S')
-        ])
+    # Write equipment data
+    for eq in equipment_list:
+        if asset_type in ['all', 'equipment']:
+            writer.writerow([
+                'Equipment', eq.name, eq.equipment_id, eq.category, eq.location, eq.status,
+                eq.manufacturer or '', eq.model or '', eq.serial_number or '', eq.criticality or '',
+                '', '', '', '', eq.description or '', eq.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            ])
+    
+    # Write inventory data
+    for inv in inventory_list:
+        if asset_type in ['all', 'inventory']:
+            writer.writerow([
+                'Inventory', inv.name, inv.part_number, inv.category, inv.location, 
+                'Active' if inv.is_active else 'Inactive',
+                '', '', '', '', inv.current_stock, inv.minimum_stock, 
+                inv.unit_cost or '', inv.unit_of_measure or '', 
+                inv.description or '', inv.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            ])
     
     output.seek(0)
     
@@ -4327,38 +4673,48 @@ def quick_assets_export_csv():
         headers={'Content-Disposition': f'attachment; filename=assets_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'}
     )
 
-# Quick Assets API Routes
-@app.route('/api/quick-assets/categories')
-@login_required
-def api_quick_assets_categories():
-    """Get all categories for autocomplete"""
-    categories = db.session.query(Equipment.category).distinct().all()
-    return jsonify([cat[0] for cat in categories if cat[0]])
 
-@app.route('/api/quick-assets/departments')
+@app.route('/quick-asset-registry/template')
 @login_required
-def api_quick_assets_departments():
-    """Get all departments for autocomplete"""
-    departments = db.session.query(Equipment.department).distinct().all()
-    return jsonify([dept[0] for dept in departments if dept[0]])
+def quick_asset_registry_template():
+    """Download CSV template for bulk upload"""
+    if current_user.role not in ['admin', 'manager']:
+        flash('Access denied. Admin/Manager privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    output = StringIO()
+    writer = csv.writer(output)
+    
+    # Write template header
+    writer.writerow([
+        'Type', 'Name', 'ID/Part Number', 'Category', 'Location', 'Status', 
+        'Manufacturer', 'Model', 'Serial Number', 'Criticality',
+        'Current Stock', 'Minimum Stock', 'Unit Cost', 'Unit of Measure',
+        'Description'
+    ])
+    
+    # Write example rows
+    writer.writerow([
+        'Equipment', 'Pump Station A', 'PUMP-001', 'Mechanical', 'Building 1', 'Operational',
+        'Grundfos', 'CR45-4', 'SN123456', 'High',
+        '', '', '', '',
+        'Main water pump for Building 1'
+    ])
+    writer.writerow([
+        'Inventory', 'Pump Filter', 'FILTER-001', 'Spare Parts', 'Warehouse A', 'Active',
+        '', '', '', '',
+        '50', '10', '25.50', 'pieces',
+        'Replacement filter for pump stations'
+    ])
+    
+    output.seek(0)
+    
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=asset_upload_template.csv'}
+    )
 
-@app.route('/api/quick-assets/locations')
-@login_required
-def api_quick_assets_locations():
-    """Get all locations for autocomplete"""
-    locations = db.session.query(Equipment.location).distinct().all()
-    return jsonify([loc[0] for loc in locations if loc[0]])
-
-@app.route('/api/quick-assets/tags')
-@login_required
-def api_quick_assets_tags():
-    """Get all tags for autocomplete"""
-    all_tags = set()
-    for equipment in Equipment.query.all():
-        if equipment.tags:
-            tags = [tag.strip() for tag in equipment.tags.split(',') if tag.strip()]
-            all_tags.update(tags)
-    return jsonify(sorted(all_tags))
 
 @app.route('/quick-maintenance-schedule', methods=['GET', 'POST'])
 @login_required
@@ -4377,7 +4733,7 @@ def quick_maintenance_schedule():
             return redirect(url_for('quick_maintenance_schedule'))
         
         try:
-            equipment = Equipment.query.get_or_404(equipment_id)
+            equipment = filter_by_company(Equipment.query).filter_by(id=equipment_id).first_or_404()
             schedule = MaintenanceSchedule(
                 equipment_id=equipment.id,
                 frequency=frequency,
@@ -4396,13 +4752,13 @@ def quick_maintenance_schedule():
             return redirect(url_for('quick_maintenance_schedule'))
     
     # GET request - show form
-    equipment_list = Equipment.query.filter_by(status='operational').order_by(Equipment.name).all()
+    equipment_list = filter_by_company(Equipment.query).filter_by(status='operational').order_by(Equipment.name).all()
     return render_template('quick_maintenance_schedule.html', equipment_list=equipment_list)
 
 @app.route('/qr-report/<equipment_id>', methods=['GET', 'POST'])
 def qr_failure_report(equipment_id):
     """QR code failure reporting page"""
-    equipment = Equipment.query.get_or_404(equipment_id)
+    equipment = Equipment.query.filter_by(id=equipment_id).first_or_404()
     
     if request.method == 'POST':
         try:
@@ -4485,7 +4841,7 @@ def qr_failure_report(equipment_id):
 @app.route('/api/qr-equipment/<equipment_id>')
 def api_qr_equipment(equipment_id):
     """API endpoint for QR code equipment data"""
-    equipment = Equipment.query.get_or_404(equipment_id)
+    equipment = Equipment.query.filter_by(id=equipment_id).first_or_404()
     return jsonify(equipment.to_dict())
 
 @app.route('/qr-image/<equipment_id>')
@@ -4500,7 +4856,7 @@ def qr_image(equipment_id):
 @app.route('/generate-qr/<equipment_id>')
 @login_required
 def generate_qr_code(equipment_id):
-    equipment = Equipment.query.get_or_404(equipment_id)
+    equipment = filter_by_company(Equipment.query).filter_by(id=equipment_id).first_or_404()
     qr_url = request.host_url.rstrip('/') + f'/qr-report/{equipment.id}'
     # Generate QR code as data URI
     img = qrcode.make(qr_url)
@@ -4514,7 +4870,7 @@ def generate_qr_code(equipment_id):
 @login_required
 def api_generate_qr(equipment_id):
     """API endpoint to get QR code data"""
-    equipment = Equipment.query.get_or_404(equipment_id)
+    equipment = filter_by_company(Equipment.query).filter_by(id=equipment_id).first_or_404()
     qr_url = request.host_url.rstrip('/') + f'/qr-report/{equipment.id}'
     
     return jsonify({
@@ -4529,6 +4885,44 @@ def test_qr():
     """Test QR code generation"""
     test_url = request.host_url.rstrip('/') + '/qr-report/1'
     return render_template('test_qr.html', qr_url=test_url)
+
+@app.route('/test-company-filter')
+@login_required
+def test_company_filter():
+    """Test route to debug company filtering"""
+    if current_user.role not in ['admin', 'manager']:
+        return "Access denied", 403
+    
+    # Get all equipment without filtering
+    all_equipment = Equipment.query.all()
+    
+    # Get equipment with company filtering
+    filtered_equipment = filter_by_company(Equipment.query).all()
+    
+    # Get equipment for current user's company directly
+    direct_company_equipment = Equipment.query.filter_by(company_id=current_user.company_id).all()
+    
+    result = {
+        'current_user_id': current_user.id,
+        'current_user_company_id': current_user.company_id,
+        'total_equipment_in_db': len(all_equipment),
+        'filtered_equipment_count': len(filtered_equipment),
+        'direct_company_equipment_count': len(direct_company_equipment),
+        'all_equipment': [
+            {'id': e.id, 'name': e.name, 'company_id': e.company_id} 
+            for e in all_equipment[:10]  # Show first 10
+        ],
+        'filtered_equipment': [
+            {'id': e.id, 'name': e.name, 'company_id': e.company_id} 
+            for e in filtered_equipment[:10]  # Show first 10
+        ],
+        'direct_company_equipment': [
+            {'id': e.id, 'name': e.name, 'company_id': e.company_id} 
+            for e in direct_company_equipment[:10]  # Show first 10
+        ]
+    }
+    
+    return jsonify(result)
 
 # WhatsApp Integration Routes
 @app.route('/whatsapp/webhook', methods=['GET', 'POST'])

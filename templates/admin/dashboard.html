@@ -120,11 +120,7 @@
                                 <i class="fas fa-user-friends me-2"></i>Team Management
                             </a>
                         </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="{{ url_for('admin_equipment') }}" class="btn btn-outline-warning btn-block">
-                                <i class="fas fa-cogs me-2"></i>Equipment Admin
-                            </a>
-                        </div>
+
                     </div>
                 </div>
             </div>
@@ -266,9 +262,80 @@
 </div>
 
 <script>
-    // Auto-refresh system status every 30 seconds
-    setInterval(function() {
-        location.reload();
-    }, 30000);
+    // Function to update dashboard statistics
+    function updateDashboardStats() {
+        fetch('/api/admin/dashboard-stats')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.error('Error fetching dashboard stats:', data.error);
+                    return;
+                }
+                
+                // Update overview cards
+                document.querySelector('.card.border-left-primary .h5').textContent = data.total_users;
+                document.querySelector('.card.border-left-success .h5').textContent = data.active_work_orders;
+                document.querySelector('.card.border-left-info .h5').textContent = data.total_equipment;
+                document.querySelector('.card.border-left-warning .h5').textContent = data.system_health + '%';
+                
+                // Update user statistics - more robust approach
+                const userStatsCards = document.querySelectorAll('.card.shadow');
+                userStatsCards.forEach(card => {
+                    const cardBody = card.querySelector('.card-body');
+                    if (cardBody) {
+                        const statItems = cardBody.querySelectorAll('.mb-3');
+                        statItems.forEach(item => {
+                            const labelSpan = item.querySelector('span:first-child');
+                            const valueSpan = item.querySelector('span.font-weight-bold');
+                            if (labelSpan && valueSpan) {
+                                const label = labelSpan.textContent.trim();
+                                switch (label) {
+                                    case 'Administrators':
+                                        valueSpan.textContent = data.admin_count;
+                                        break;
+                                    case 'Managers':
+                                        valueSpan.textContent = data.manager_count;
+                                        break;
+                                    case 'Technicians':
+                                        valueSpan.textContent = data.technician_count;
+                                        break;
+                                    case 'Viewers':
+                                        valueSpan.textContent = data.viewer_count;
+                                        break;
+                                }
+                            }
+                        });
+                    }
+                });
+                
+                // Update system health status
+                const systemHealthCard = document.querySelector('.card.border-left-warning');
+                if (systemHealthCard) {
+                    const statusText = systemHealthCard.querySelector('small');
+                    if (statusText && data.system_health_data && data.system_health_data.status) {
+                        statusText.textContent = data.system_health_data.status.charAt(0).toUpperCase() + data.system_health_data.status.slice(1);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error updating dashboard stats:', error);
+            });
+    }
+    
+    // Update stats every 30 seconds
+    setInterval(updateDashboardStats, 30000);
+    
+    // Initial update after page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Small delay to ensure page is fully loaded
+        setTimeout(updateDashboardStats, 1000);
+    });
+    
+    // Also update when user returns to the page (visibility change)
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) {
+            updateDashboardStats();
+        }
+    });
 </script>
 {% endblock %} 

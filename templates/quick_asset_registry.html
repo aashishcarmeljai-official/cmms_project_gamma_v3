@@ -1,0 +1,627 @@
+{% extends "base.html" %}
+
+{% block title %}Quick Asset Registry - CMMS{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-cogs text-primary me-2"></i>
+                Quick Asset Registry
+            </h1>
+            <p class="text-muted">Unified view of equipment and inventory assets</p>
+        </div>
+        <div class="btn-group">
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+                <i class="fas fa-plus me-2"></i>Quick Add Asset
+            </button>
+            <button class="btn btn-outline-primary" onclick="exportAssets()">
+                <i class="fas fa-download me-2"></i>Export
+            </button>
+            <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bulkUploadModal">
+                <i class="fas fa-upload me-2"></i>Bulk Upload
+            </button>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Assets
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ assets|length }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-cogs fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Equipment
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ assets|selectattr('type', 'equalto', 'equipment')|list|length }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-cog fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Inventory Items
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ assets|selectattr('type', 'equalto', 'inventory')|list|length }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-boxes fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Low Stock Items
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ assets|selectattr('type', 'equalto', 'inventory')|selectattr('stock_level', 'defined')|selectattr('stock_level', 'le', 10)|list|length }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-white">
+                <i class="fas fa-filter me-2"></i>Search & Filter Assets
+            </h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('quick_asset_registry') }}" id="filterForm">
+                <div class="row">
+                    <div class="col-md-2">
+                        <label for="type" class="form-label">Asset Type</label>
+                        <select class="form-select" id="type" name="type" onchange="this.form.submit()">
+                            <option value="all" {{ 'selected' if filters.type == 'all' }}>All Assets</option>
+                            <option value="equipment" {{ 'selected' if filters.type == 'equipment' }}>Equipment Only</option>
+                            <option value="inventory" {{ 'selected' if filters.type == 'inventory' }}>Inventory Only</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="category" class="form-label">Category</label>
+                        <select class="form-select" id="category" name="category" onchange="this.form.submit()">
+                            <option value="all" {{ 'selected' if filters.category == 'all' }}>All Categories</option>
+                            {% for category in categories %}
+                            <option value="{{ category }}" {{ 'selected' if filters.category == category }}>{{ category }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="location" class="form-label">Location</label>
+                        <select class="form-select" id="location" name="location" onchange="this.form.submit()">
+                            <option value="all" {{ 'selected' if filters.location == 'all' }}>All Locations</option>
+                            {% for location in locations %}
+                            <option value="{{ location }}" {{ 'selected' if filters.location == location }}>{{ location }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-select" id="status" name="status" onchange="this.form.submit()">
+                            <option value="all" {{ 'selected' if filters.status == 'all' }}>All Status</option>
+                            <option value="operational" {{ 'selected' if filters.status == 'operational' }}>Operational</option>
+                            <option value="maintenance" {{ 'selected' if filters.status == 'maintenance' }}>Maintenance</option>
+                            <option value="offline" {{ 'selected' if filters.status == 'offline' }}>Offline</option>
+                            <option value="active" {{ 'selected' if filters.status == 'active' }}>Active</option>
+                            <option value="inactive" {{ 'selected' if filters.status == 'inactive' }}>Inactive</option>
+                            <option value="low_stock" {{ 'selected' if filters.status == 'low_stock' }}>Low Stock</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="search" class="form-label">Search</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="search" name="search" 
+                                   placeholder="Search by name, ID, part number..." 
+                                   value="{{ filters.search }}">
+                            <button class="btn btn-outline-secondary" type="submit">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary" type="button" onclick="clearFilters()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Assets Table -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-white">
+                <i class="fas fa-list me-2"></i>Unified Asset View ({{ assets|length }} items)
+            </h6>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-light btn-sm" onclick="selectAll()">
+                    <i class="fas fa-check-square me-1"></i>Select All
+                </button>
+                <button class="btn btn-outline-light btn-sm" onclick="bulkEdit()">
+                    <i class="fas fa-edit me-1"></i>Bulk Edit
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if assets %}
+                <div class="table-responsive">
+                    <table class="table table-hover" id="assetsTable">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
+                                </th>
+                                <th>Type</th>
+                                <th>Name/ID</th>
+                                <th>Category</th>
+                                <th>Location</th>
+                                <th>Status</th>
+                                <th>Stock/Criticality</th>
+                                <th>Details</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for asset in assets %}
+                            <tr class="asset-row" data-asset-id="{{ asset.id }}" data-asset-type="{{ asset.type }}">
+                                <td>
+                                    <input type="checkbox" class="asset-checkbox" value="{{ asset.id }}" data-type="{{ asset.type }}">
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ 'primary' if asset.type == 'equipment' else 'info' }}">
+                                        <i class="fas fa-{{ 'cog' if asset.type == 'equipment' else 'box' }} me-1"></i>
+                                        {{ asset.type.title() }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div>
+                                        <strong>{{ asset.name }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ asset.identifier }}</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ asset.category or 'N/A' }}</span>
+                                </td>
+                                <td>{{ asset.location or 'N/A' }}</td>
+                                <td>
+                                    {% if asset.type == 'equipment' %}
+                                        <span class="badge bg-{{ 'success' if asset.status == 'operational' else 'warning' if asset.status == 'maintenance' else 'danger' }}">
+                                            {{ asset.status.replace('_', ' ').title() }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-{{ 'success' if asset.status == 'active' else 'secondary' }}">
+                                            {{ asset.status.title() }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if asset.type == 'equipment' %}
+                                        {% if asset.criticality %}
+                                            <span class="badge bg-{{ 'success' if asset.criticality == 'low' else 'info' if asset.criticality == 'medium' else 'warning' if asset.criticality == 'high' else 'danger' }}">
+                                                {{ asset.criticality.title() }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if asset.stock_level is not none %}
+                                            <div>
+                                                <span class="fw-bold">{{ asset.stock_level }}</span>
+                                                {% if asset.stock_level <= 10 %}
+                                                    <span class="badge bg-danger ms-1">Low</span>
+                                                {% endif %}
+                                            </div>
+                                            {% if asset.unit_cost %}
+                                                <small class="text-muted">${{ "%.2f"|format(asset.unit_cost) }}</small>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if asset.type == 'equipment' %}
+                                        {% if asset.manufacturer and asset.model %}
+                                            <small>{{ asset.manufacturer }} {{ asset.model }}</small>
+                                        {% endif %}
+                                        {% if asset.serial_number %}
+                                            <br><small class="text-muted">S/N: {{ asset.serial_number }}</small>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if asset.stock_level is not none %}
+                                            <small>Stock: {{ asset.stock_level }}</small>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-sm btn-outline-primary" onclick="viewAsset('{{ asset.type }}', {{ asset.id }})" title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-warning" onclick="editAsset('{{ asset.type }}', {{ asset.id }})" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        {% if asset.type == 'equipment' %}
+                                        <button class="btn btn-sm btn-outline-success" onclick="createWorkOrder({{ asset.id }})" title="Create Work Order">
+                                            <i class="fas fa-plus"></i> WO
+                                        </button>
+                                        {% endif %}
+                                        <button class="btn btn-sm btn-outline-danger" onclick="deleteAsset('{{ asset.type }}', {{ asset.id }}, '{{ asset.name }}')" title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-cogs fa-4x text-muted mb-3"></i>
+                    <h4 class="text-muted">No Assets Found</h4>
+                    <p class="text-muted">Get started by adding your first asset.</p>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+                        <i class="fas fa-plus me-2"></i>Add Asset
+                    </button>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Quick Add Asset Modal -->
+<div class="modal fade" id="quickAddModal" tabindex="-1" aria-labelledby="quickAddModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickAddModalLabel">
+                    <i class="fas fa-plus me-2"></i>Quick Add Asset
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickAddForm" method="POST" action="{{ url_for('quick_asset_registry') }}">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="assetType" class="form-label">Asset Type *</label>
+                            <select class="form-select" id="assetType" name="asset_type" required onchange="toggleAssetFields()">
+                                <option value="">Select Asset Type</option>
+                                <option value="equipment">Equipment</option>
+                                <option value="inventory">Inventory Item</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="assetName" class="form-label">Name *</label>
+                            <input type="text" class="form-control" id="assetName" name="name" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label for="assetIdentifier" class="form-label">ID/Part Number *</label>
+                            <input type="text" class="form-control" id="assetIdentifier" name="identifier" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="assetCategory" class="form-label">Category</label>
+                            <input type="text" class="form-control" id="assetCategory" name="category">
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label for="assetLocation" class="form-label">Location</label>
+                            <input type="text" class="form-control" id="assetLocation" name="location">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="assetStatus" class="form-label">Status</label>
+                            <select class="form-select" id="assetStatus" name="status">
+                                <option value="operational">Operational</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="offline">Offline</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Equipment-specific fields -->
+                    <div id="equipmentFields" style="display: none;">
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <label for="manufacturer" class="form-label">Manufacturer</label>
+                                <input type="text" class="form-control" id="manufacturer" name="manufacturer">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="model" class="form-label">Model</label>
+                                <input type="text" class="form-control" id="model" name="model">
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <label for="serialNumber" class="form-label">Serial Number</label>
+                                <input type="text" class="form-control" id="serialNumber" name="serial_number">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="criticality" class="form-label">Criticality</label>
+                                <select class="form-select" id="criticality" name="criticality">
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
+                                    <option value="critical">Critical</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Inventory-specific fields -->
+                    <div id="inventoryFields" style="display: none;">
+                        <div class="row mt-3">
+                            <div class="col-md-4">
+                                <label for="currentStock" class="form-label">Current Stock</label>
+                                <input type="number" class="form-control" id="currentStock" name="current_stock" min="0">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="minimumStock" class="form-label">Minimum Stock</label>
+                                <input type="number" class="form-control" id="minimumStock" name="minimum_stock" min="0">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="unitCost" class="form-label">Unit Cost</label>
+                                <input type="number" class="form-control" id="unitCost" name="unit_cost" min="0" step="0.01">
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <label for="unitOfMeasure" class="form-label">Unit of Measure</label>
+                                <input type="text" class="form-control" id="unitOfMeasure" name="unit_of_measure" placeholder="e.g., pieces, kg, liters">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="isActive" class="form-label">Status</label>
+                                <select class="form-select" id="isActive" name="is_active">
+                                    <option value="true">Active</option>
+                                    <option value="false">Inactive</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="quickAddForm" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>Add Asset
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Upload Modal -->
+<div class="modal fade" id="bulkUploadModal" tabindex="-1" aria-labelledby="bulkUploadModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkUploadModalLabel">
+                    <i class="fas fa-upload me-2"></i>Bulk Upload Assets
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Instructions:</strong> Upload a CSV file with asset data. 
+                    <a href="#" onclick="downloadTemplate()">Download template</a>
+                </div>
+                <form id="bulkUploadForm" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="csvFile" class="form-label">CSV File</label>
+                        <input type="file" class="form-control" id="csvFile" name="csv_file" accept=".csv" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="assetTypeBulk" class="form-label">Asset Type</label>
+                        <select class="form-select" id="assetTypeBulk" name="asset_type" required>
+                            <option value="">Select Asset Type</option>
+                            <option value="equipment">Equipment</option>
+                            <option value="inventory">Inventory</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="bulkUploadForm" class="btn btn-primary">
+                    <i class="fas fa-upload me-2"></i>Upload
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="assetName"></strong>?</p>
+                <p class="text-danger"><small>This action cannot be undone.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete Asset</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Toggle asset type fields
+    function toggleAssetFields() {
+        const assetType = document.getElementById('assetType').value;
+        const equipmentFields = document.getElementById('equipmentFields');
+        const inventoryFields = document.getElementById('inventoryFields');
+        const statusField = document.getElementById('assetStatus');
+        const isActiveField = document.getElementById('isActive');
+        
+        if (assetType === 'equipment') {
+            equipmentFields.style.display = 'block';
+            inventoryFields.style.display = 'none';
+            statusField.style.display = 'block';
+            isActiveField.style.display = 'none';
+        } else if (assetType === 'inventory') {
+            equipmentFields.style.display = 'none';
+            inventoryFields.style.display = 'block';
+            statusField.style.display = 'none';
+            isActiveField.style.display = 'block';
+        } else {
+            equipmentFields.style.display = 'none';
+            inventoryFields.style.display = 'none';
+        }
+    }
+    
+    // Clear filters
+    function clearFilters() {
+        document.getElementById('type').value = 'all';
+        document.getElementById('category').value = 'all';
+        document.getElementById('location').value = 'all';
+        document.getElementById('status').value = 'all';
+        document.getElementById('search').value = '';
+        document.getElementById('filterForm').submit();
+    }
+    
+    // Select all assets
+    function selectAll() {
+        const checkboxes = document.querySelectorAll('.asset-checkbox');
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = selectAllCheckbox.checked;
+        });
+    }
+    
+    function toggleSelectAll() {
+        selectAll();
+    }
+    
+    // View asset details
+    function viewAsset(type, id) {
+        if (type === 'equipment') {
+            window.open(`/equipment/${id}`, '_blank');
+        } else {
+            window.open(`/inventory/${id}`, '_blank');
+        }
+    }
+    
+    // Edit asset
+    function editAsset(type, id) {
+        if (type === 'equipment') {
+            window.location.href = `/equipment/${id}/edit`;
+        } else {
+            window.location.href = `/inventory/${id}/edit`;
+        }
+    }
+    
+    // Create work order for equipment
+    function createWorkOrder(equipmentId) {
+        window.open(`/work-orders/new?equipment_id=${equipmentId}`, '_blank');
+    }
+    
+    // Delete asset
+    function deleteAsset(type, id, name) {
+        document.getElementById('assetName').textContent = name;
+        document.getElementById('deleteForm').action = `/${type}/${id}/delete`;
+        new bootstrap.Modal(document.getElementById('deleteModal')).show();
+    }
+    
+    // Export assets
+    function exportAssets() {
+        const filters = new URLSearchParams(window.location.search);
+        window.location.href = `/quick-asset-registry/export?${filters.toString()}`;
+    }
+    
+    // Download CSV template
+    function downloadTemplate() {
+        window.location.href = '/quick-asset-registry/template';
+    }
+    
+    // Bulk edit selected assets
+    function bulkEdit() {
+        const selectedAssets = document.querySelectorAll('.asset-checkbox:checked');
+        if (selectedAssets.length === 0) {
+            alert('Please select assets to edit.');
+            return;
+        }
+        
+        // Implement bulk edit functionality
+        alert(`Bulk edit ${selectedAssets.length} selected assets`);
+    }
+    
+    // Real-time search
+    document.getElementById('search').addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const rows = document.querySelectorAll('.asset-row');
+        
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(searchTerm) ? '' : 'none';
+        });
+    });
+</script>
+{% endblock %} 

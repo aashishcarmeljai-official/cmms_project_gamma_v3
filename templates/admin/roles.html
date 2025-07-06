@@ -59,46 +59,94 @@
         </div>
         <div class="card-body">
             <form method="GET" class="row g-3">
-                <div class="col-md-4">
-                    <label for="search" class="form-label">Search</label>
+                <!-- First Row -->
+                <div class="col-lg-4 col-md-6">
+                    <label for="search" class="form-label fw-bold">Search</label>
                     <input type="text" class="form-control" id="search" name="search" 
-                           value="{{ request.args.get('search', '') }}" placeholder="Role name or description">
+                           value="{{ filters.search }}" placeholder="Role name, display name, or description">
                 </div>
-                <div class="col-md-2">
-                    <label for="type_filter" class="form-label">Type</label>
+                <div class="col-lg-2 col-md-6">
+                    <label for="type_filter" class="form-label fw-bold">Type</label>
                     <select class="form-select" id="type_filter" name="type">
                         <option value="">All Types</option>
-                        <option value="system" {{ 'selected' if request.args.get('type') == 'system' }}>System Roles</option>
-                        <option value="custom" {{ 'selected' if request.args.get('type') == 'custom' }}>Custom Roles</option>
+                        <option value="system" {{ 'selected' if filters.type == 'system' }}>System Roles</option>
+                        <option value="custom" {{ 'selected' if filters.type == 'custom' }}>Custom Roles</option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label for="status_filter" class="form-label">Status</label>
+                <div class="col-lg-2 col-md-6">
+                    <label for="status_filter" class="form-label fw-bold">Status</label>
                     <select class="form-select" id="status_filter" name="status">
                         <option value="">All Status</option>
-                        <option value="active" {{ 'selected' if request.args.get('status') == 'active' }}>Active</option>
-                        <option value="inactive" {{ 'selected' if request.args.get('status') == 'inactive' }}>Inactive</option>
+                        <option value="active" {{ 'selected' if filters.status == 'active' }}>Active</option>
+                        <option value="inactive" {{ 'selected' if filters.status == 'inactive' }}>Inactive</option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label for="permission_filter" class="form-label">Permission</label>
+                <div class="col-lg-2 col-md-6">
+                    <label for="permission_filter" class="form-label fw-bold">Permission</label>
                     <select class="form-select" id="permission_filter" name="permission">
                         <option value="">All Permissions</option>
-                        <option value="admin_dashboard" {{ 'selected' if request.args.get('permission') == 'admin_dashboard' }}>Admin Dashboard</option>
-                        <option value="user_manage" {{ 'selected' if request.args.get('permission') == 'user_manage' }}>User Management</option>
-                        <option value="equipment_manage" {{ 'selected' if request.args.get('permission') == 'equipment_manage' }}>Equipment Management</option>
-                        <option value="workorder_manage" {{ 'selected' if request.args.get('permission') == 'workorder_manage' }}>Work Order Management</option>
+                        <option value="admin_dashboard" {{ 'selected' if filters.permission == 'admin_dashboard' }}>Admin Dashboard</option>
+                        <option value="user_manage" {{ 'selected' if filters.permission == 'user_manage' }}>User Management</option>
+                        <option value="equipment_manage" {{ 'selected' if filters.permission == 'equipment_manage' }}>Equipment Management</option>
+                        <option value="workorder_manage" {{ 'selected' if filters.permission == 'workorder_manage' }}>Work Order Management</option>
+                        <option value="role_manage" {{ 'selected' if filters.permission == 'role_manage' }}>Role Management</option>
+                        <option value="team_manage" {{ 'selected' if filters.permission == 'team_manage' }}>Team Management</option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">&nbsp;</label>
-                    <div class="d-grid">
+                <div class="col-lg-2 col-md-6">
+                    <label for="sort_by" class="form-label fw-bold">Sort By</label>
+                    <select class="form-select" id="sort_by" name="sort">
+                        <option value="name" {{ 'selected' if filters.sort == 'name' }}>Name</option>
+                        <option value="display_name" {{ 'selected' if filters.sort == 'display_name' }}>Display Name</option>
+                        <option value="created_at" {{ 'selected' if filters.sort == 'created_at' }}>Created Date</option>
+                    </select>
+                </div>
+                
+                <!-- Second Row -->
+                <div class="col-12">
+                    <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-search me-2"></i>Search
+                            <i class="fas fa-search me-2"></i>Apply Filters
+                        </button>
+                        <a href="{{ url_for('admin_roles') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i>Clear Filters
+                        </a>
+                        <button type="button" class="btn btn-outline-info" onclick="toggleAdvancedFilters()">
+                            <i class="fas fa-cog me-2"></i>Advanced Options
                         </button>
                     </div>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Quick Filter Buttons -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-white">Quick Filters</h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-12">
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-outline-primary" onclick="applyQuickFilter('system')">
+                            <i class="fas fa-cogs me-1"></i>System Roles
+                        </button>
+                        <button type="button" class="btn btn-outline-info" onclick="applyQuickFilter('custom')">
+                            <i class="fas fa-user-edit me-1"></i>Custom Roles
+                        </button>
+                        <button type="button" class="btn btn-outline-success" onclick="applyQuickFilter('active')">
+                            <i class="fas fa-check-circle me-1"></i>Active Roles
+                        </button>
+                        <button type="button" class="btn btn-outline-warning" onclick="applyQuickFilter('inactive')">
+                            <i class="fas fa-times-circle me-1"></i>Inactive Roles
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" onclick="applyQuickFilter('admin')">
+                            <i class="fas fa-shield-alt me-1"></i>Admin Roles
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -250,8 +298,15 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <span class="badge bg-secondary">{{ role.users|length }}</span>
+                                <span class="badge bg-secondary">{{ role_user_counts[role.id] }}</span>
                                 <small class="text-muted d-block">users</small>
+                                {% if role_user_counts[role.id] > 0 %}
+                                <button class="btn btn-sm btn-outline-info mt-1" 
+                                        onclick="viewRoleUsers({{ role.id }}, '{{ role.display_name }}')" 
+                                        title="View users with this role">
+                                    <i class="fas fa-users"></i> View
+                                </button>
+                                {% endif %}
                             </td>
                             <td>
                                 <span class="badge bg-{{ 'success' if role.is_active else 'danger' }}">
@@ -856,6 +911,82 @@ function deleteRole(roleId) {
     new bootstrap.Modal(document.getElementById('deleteRoleModal')).show();
 }
 
+function viewRoleUsers(roleId, roleName) {
+    // Fetch users for this role from the API
+    fetch(`/admin/roles/${roleId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const roleUsers = data.role.users || [];
+                
+                let usersHtml = '';
+                if (roleUsers.length > 0) {
+                    roleUsers.forEach(user => {
+                        usersHtml += `
+                            <div class="d-flex align-items-center mb-2 p-2 border rounded">
+                                <div class="avatar me-3">
+                                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                                         style="width: 40px; height: 40px;">
+                                        ${user.first_name ? user.first_name[0] : user.username[0]}
+                                    </div>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="fw-bold">${user.first_name} ${user.last_name}</div>
+                                    <div class="text-muted">${user.email}</div>
+                                    <small class="text-muted">@${user.username}</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-${user.is_active ? 'success' : 'danger'}">
+                                        ${user.is_active ? 'Active' : 'Inactive'}
+                                    </span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    usersHtml = '<p class="text-muted">No users assigned to this role.</p>';
+                }
+                
+                // Show in a modal
+                const modal = document.createElement('div');
+                modal.className = 'modal fade';
+                modal.innerHTML = `
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Users with Role: ${roleName}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <span class="badge bg-info">${roleUsers.length} users</span>
+                                </div>
+                                ${usersHtml}
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+                new bootstrap.Modal(modal).show();
+                
+                // Clean up modal after it's hidden
+                modal.addEventListener('hidden.bs.modal', function() {
+                    document.body.removeChild(modal);
+                });
+            } else {
+                alert('Error loading role users');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading role users');
+        });
+}
+
 // Form validation
 document.getElementById('createRoleForm').addEventListener('submit', function(e) {
     const name = document.getElementById('roleName').value;
@@ -891,6 +1022,63 @@ document.getElementById('editRoleForm').addEventListener('submit', function(e) {
         alert('Role name must contain only lowercase letters and underscores');
         return;
     }
+});
+
+// Search and filter functionality
+function applyQuickFilter(filterType) {
+    let url = new URL(window.location);
+    
+    switch(filterType) {
+        case 'system':
+            url.searchParams.set('type', 'system');
+            break;
+        case 'custom':
+            url.searchParams.set('type', 'custom');
+            break;
+        case 'active':
+            url.searchParams.set('status', 'active');
+            break;
+        case 'inactive':
+            url.searchParams.set('status', 'inactive');
+            break;
+        case 'admin':
+            url.searchParams.set('permission', 'admin_dashboard');
+            break;
+    }
+    
+    window.location.href = url.toString();
+}
+
+function toggleAdvancedFilters() {
+    const advancedFilters = document.querySelectorAll('#sort_by');
+    const button = document.querySelector('button[onclick="toggleAdvancedFilters()"]');
+    
+    advancedFilters.forEach(filter => {
+        if (filter.style.display === 'none') {
+            filter.style.display = 'block';
+            button.innerHTML = '<i class="fas fa-eye-slash me-2"></i>Hide Advanced';
+        } else {
+            filter.style.display = 'none';
+            button.innerHTML = '<i class="fas fa-cog me-2"></i>Advanced Options';
+        }
+    });
+}
+
+// Auto-submit form on filter change
+document.addEventListener('DOMContentLoaded', function() {
+    const filterInputs = document.querySelectorAll('#search, #type_filter, #status_filter, #permission_filter');
+    
+    filterInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            document.querySelector('form[method="GET"]').submit();
+        });
+    });
+    
+    // Initialize advanced filters as hidden by default
+    const advancedFilters = document.querySelectorAll('#sort_by');
+    advancedFilters.forEach(filter => {
+        filter.style.display = 'none';
+    });
 });
 </script>
 {% endblock %} 
