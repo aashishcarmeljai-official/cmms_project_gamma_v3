@@ -225,6 +225,7 @@ class WorkOrder(db.Model):
     status = db.Column(db.String(20), default='open')  # open, in_progress, completed, cancelled
     type = db.Column(db.String(20), default='corrective')  # corrective, preventive, emergency
     equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'), nullable=False)
+    location_id = db.Column(db.Integer, db.ForeignKey('locations.id'))  # New: Direct location assignment
     assigned_technician_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     assigned_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'))  # New: Team assignment
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -242,6 +243,7 @@ class WorkOrder(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
+    location = db.relationship('Location', backref='work_orders')
     assigned_team = db.relationship('Team', backref='assigned_work_orders')
     comments = db.relationship('WorkOrderComment', backref='work_order', lazy=True, cascade='all, delete-orphan')
     
@@ -259,6 +261,8 @@ class WorkOrder(db.Model):
             'type': self.type,
             'equipment_id': self.equipment_id,
             'equipment_name': self.equipment.name if self.equipment else None,
+            'location_id': self.location_id,
+            'location_name': self.location.name if self.location else None,
             'assigned_technician_id': self.assigned_technician_id,
             'assigned_technician_name': f"{self.assigned_technician.first_name} {self.assigned_technician.last_name}" if self.assigned_technician else None,
             'assigned_team_id': self.assigned_team_id,

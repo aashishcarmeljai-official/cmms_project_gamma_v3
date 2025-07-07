@@ -496,7 +496,11 @@ def health():
 def equipment_list():
     if not user_has_permission(current_user, 'equipment_view'):
         abort(403)
-    equipment = filter_by_company(Equipment.query).all()
+    # Use joinedload to eagerly load location and department relationships
+    equipment = filter_by_company(Equipment.query).options(
+        db.joinedload(Equipment.location_info),
+        db.joinedload(Equipment.department_info)
+    ).all()
     return render_template('equipment/list.html', equipment=equipment)
 
 @app.route('/equipment/new', methods=['GET', 'POST'])
@@ -514,6 +518,23 @@ def equipment_new():
         department_id = data.get('department_id')
         department_string = data.get('department')
         
+        # Handle date fields
+        purchase_date = None
+        if data.get('purchase_date'):
+            try:
+                purchase_date = datetime.strptime(data['purchase_date'], '%Y-%m-%d').date()
+            except ValueError:
+                flash('Invalid purchase date format', 'error')
+                return redirect(url_for('equipment_new'))
+        
+        warranty_expiry = None
+        if data.get('warranty_expiry'):
+            try:
+                warranty_expiry = datetime.strptime(data['warranty_expiry'], '%Y-%m-%d').date()
+            except ValueError:
+                flash('Invalid warranty expiry date format', 'error')
+                return redirect(url_for('equipment_new'))
+        
         equipment = Equipment(
             name=data['name'],
             equipment_id=data['equipment_id'],
@@ -521,6 +542,8 @@ def equipment_new():
             manufacturer=data.get('manufacturer'),
             model=data.get('model'),
             serial_number=data.get('serial_number'),
+            purchase_date=purchase_date,
+            warranty_expiry=warranty_expiry,
             location=location_string,  # Keep for backward compatibility
             location_id=location_id,  # New location relationship
             department=department_string,  # Keep for backward compatibility
@@ -548,7 +571,11 @@ def equipment_new():
 def equipment_detail(id):
     if not user_has_permission(current_user, 'equipment_view'):
         abort(403)
-    equipment = filter_by_company(Equipment.query).filter_by(id=id).first()
+    # Use joinedload to eagerly load location and department relationships
+    equipment = filter_by_company(Equipment.query).options(
+        db.joinedload(Equipment.location_info),
+        db.joinedload(Equipment.department_info)
+    ).filter_by(id=id).first()
     if not equipment:
         abort(404)
     work_orders = filter_by_company(WorkOrder.query).filter_by(equipment_id=id).order_by(WorkOrder.created_at.desc()).all()
@@ -559,6 +586,88 @@ def equipment_detail(id):
                          work_orders=work_orders,
                          maintenance_schedules=maintenance_schedules,
                          today=today)
+
+@app.route('/equipment/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def equipment_edit(id):
+    if not user_has_permission(current_user, 'equipment_edit'):
+        abort(403)
+    
+    # Use joinedload to eagerly load location and department relationships
+    equipment = filter_by_company(Equipment.query).options(
+        db.joinedload(Equipment.location_info),
+        db.joinedload(Equipment.department_info)
+    ).filter_by(id=id).first()
+    
+    if not equipment:
+        abort(404)
+    
+    if request.method == 'POST':
+        data = request.form
+        
+        # Handle location - if location_id is provided, use it; otherwise use location string
+        location_id = data.get('location_id')
+        location_string = data.get('location')
+        
+        # Handle department - if department_id is provided, use it; otherwise use department string
+        department_id = data.get('department_id')
+        department_string = data.get('department')
+        
+        # Handle date fields
+        purchase_date = None
+        if data.get('purchase_date'):
+            try:
+                purchase_date = datetime.strptime(data['purchase_date'], '%Y-%m-%d').date()
+            except ValueError:
+                flash('Invalid purchase date format', 'error')
+                return redirect(url_for('equipment_edit', id=equipment.id))
+        
+        warranty_expiry = None
+        if data.get('warranty_expiry'):
+            try:
+                warranty_expiry = datetime.strptime(data['warranty_expiry'], '%Y-%m-%d').date()
+            except ValueError:
+                flash('Invalid warranty expiry date format', 'error')
+                return redirect(url_for('equipment_edit', id=equipment.id))
+        
+        # Update equipment fields
+        equipment.name = data['name']
+        equipment.equipment_id = data['equipment_id']
+        equipment.category = data['category']
+        equipment.manufacturer = data.get('manufacturer')
+        equipment.model = data.get('model')
+        equipment.serial_number = data.get('serial_number')
+        equipment.purchase_date = purchase_date
+        equipment.warranty_expiry = warranty_expiry
+        equipment.location = location_string  # Keep for backward compatibility
+        equipment.location_id = location_id if location_id else None  # New location relationship
+        equipment.department = department_string  # Keep for backward compatibility
+        equipment.department_id = department_id if department_id else None  # New department relationship
+        equipment.criticality = data.get('criticality', 'medium')
+        equipment.description = data.get('description')
+        equipment.specifications = data.get('specifications')
+        equipment.updated_at = datetime.utcnow()
+        
+        try:
+            db.session.commit()
+            flash('Equipment updated successfully!', 'success')
+            return redirect(url_for('equipment_detail', id=equipment.id))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating equipment: {str(e)}', 'error')
+    
+    # Get categories for the dropdown
+    categories = filter_by_company(Category.query).filter_by(is_active=True).order_by(Category.name).all()
+    # Get locations for the dropdown
+    locations = filter_by_company(Location.query).filter_by(is_active=True).order_by(Location.name).all()
+    # Get departments for the dropdown
+    departments = filter_by_company(Department.query).filter_by(is_active=True).order_by(Department.name).all()
+    
+    return render_template('equipment/edit.html', 
+                         equipment=equipment, 
+                         categories=categories, 
+                         locations=locations, 
+                         departments=departments)
 
 @app.route('/equipment/<int:id>/delete', methods=['POST'])
 @login_required
@@ -762,6 +871,7 @@ def work_order_new():
             priority=data.get('priority', 'medium'),
             type=data.get('type', 'corrective'),
             equipment_id=data['equipment_id'],
+            location_id=data.get('location_id') if data.get('location_id') else None,
             assigned_technician_id=data.get('assigned_technician_id') if data.get('assigned_technician_id') else None,
             assigned_team_id=data.get('assigned_team_id') if data.get('assigned_team_id') else None,
             created_by_id=current_user.id,
@@ -780,7 +890,8 @@ def work_order_new():
     equipment = filter_by_company(Equipment.query).all()
     technicians = filter_by_company(User.query).filter_by(role='technician').all()
     teams = filter_by_company(Team.query).all()
-    return render_template('work_orders/new.html', equipment=equipment, technicians=technicians, teams=teams)
+    locations = filter_by_company(Location.query).all()
+    return render_template('work_orders/new.html', equipment=equipment, technicians=technicians, teams=teams, locations=locations)
 
 @app.route('/work-orders/<int:id>')
 @login_required
@@ -799,7 +910,7 @@ def work_order_update_status(id):
     work_order = WorkOrder.query.get_or_404(id)
     new_status = request.form.get('status')
     
-    if new_status in ['open', 'in_progress', 'completed', 'cancelled']:
+    if new_status in ['open', 'on_hold', 'in_progress', 'completed']:
         work_order.status = new_status
         
         if new_status == 'in_progress' and not work_order.actual_start_time:
@@ -813,6 +924,106 @@ def work_order_update_status(id):
         flash('Work order status updated!', 'success')
     
     return redirect(url_for('work_order_detail', id=id))
+
+@app.route('/work-orders/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def work_order_edit(id):
+    """Edit work order"""
+    if not user_has_permission(current_user, 'workorder_edit'):
+        abort(403)
+    
+    work_order = WorkOrder.query.get_or_404(id)
+    enforce_company_access(work_order)
+    
+    if request.method == 'POST':
+        data = request.form
+        
+        # Handle image uploads
+        images = []
+        if 'images' in request.files:
+            uploaded_files = request.files.getlist('images')
+            static_folder = app.static_folder or ''
+            for file in uploaded_files:
+                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'image')
+                if file_path:
+                    images.append(file_path)
+        
+        # Handle video uploads
+        videos = []
+        if 'videos' in request.files:
+            uploaded_files = request.files.getlist('videos')
+            static_folder = app.static_folder or ''
+            for file in uploaded_files:
+                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'video')
+                if file_path:
+                    videos.append(file_path)
+        
+        # Handle voice note uploads
+        voice_notes = []
+        if 'voice_notes' in request.files:
+            uploaded_files = request.files.getlist('voice_notes')
+            static_folder = app.static_folder or ''
+            for file in uploaded_files:
+                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'audio')
+                if file_path:
+                    voice_notes.append(file_path)
+        
+        # Update work order fields
+        work_order.title = data['title']
+        work_order.description = data['description']
+        work_order.priority = data.get('priority', 'medium')
+        work_order.type = data.get('type', 'corrective')
+        work_order.equipment_id = data['equipment_id']
+        work_order.location_id = data.get('location_id') if data.get('location_id') else None
+        work_order.assigned_technician_id = data.get('assigned_technician_id') if data.get('assigned_technician_id') else None
+        work_order.assigned_team_id = data.get('assigned_team_id') if data.get('assigned_team_id') else None
+        work_order.estimated_duration = data.get('estimated_duration')
+        work_order.scheduled_date = datetime.strptime(data['scheduled_date'], '%Y-%m-%dT%H:%M') if data.get('scheduled_date') else None
+        work_order.due_date = datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M') if data.get('due_date') else None
+        
+        # Update media files (append to existing)
+        if images:
+            existing_images = work_order.images.split(',') if work_order.images else []
+            work_order.images = ','.join(existing_images + images)
+        if videos:
+            existing_videos = work_order.videos.split(',') if work_order.videos else []
+            work_order.videos = ','.join(existing_videos + videos)
+        if voice_notes:
+            existing_voice_notes = work_order.voice_notes.split(',') if work_order.voice_notes else []
+            work_order.voice_notes = ','.join(existing_voice_notes + voice_notes)
+        
+        db.session.commit()
+        flash('Work order updated successfully!', 'success')
+        return redirect(url_for('work_order_detail', id=work_order.id))
+    
+    equipment = filter_by_company(Equipment.query).all()
+    technicians = filter_by_company(User.query).filter_by(role='technician').all()
+    teams = filter_by_company(Team.query).all()
+    locations = filter_by_company(Location.query).all()
+    return render_template('work_orders/edit.html', work_order=work_order, equipment=equipment, technicians=technicians, teams=teams, locations=locations)
+
+@app.route('/work-orders/<int:id>/delete', methods=['POST'])
+@login_required
+def work_order_delete(id):
+    """Delete work order"""
+    if not user_has_permission(current_user, 'workorder_delete'):
+        abort(403)
+    
+    work_order = WorkOrder.query.get_or_404(id)
+    enforce_company_access(work_order)
+    
+    # Delete associated comments
+    WorkOrderComment.query.filter_by(work_order_id=id).delete()
+    
+    # Delete associated checklist items
+    WorkOrderChecklist.query.filter_by(work_order_id=id).delete()
+    
+    # Delete the work order
+    db.session.delete(work_order)
+    db.session.commit()
+    
+    flash('Work order deleted successfully!', 'success')
+    return redirect(url_for('work_orders_list'))
 
 @app.route('/work-orders/<int:id>/add-comment', methods=['POST'])
 @login_required
@@ -982,15 +1193,32 @@ def inventory_edit(id):
     if not inventory:
         abort(404)
     enforce_company_access(inventory)
-    form = InventoryForm(obj=inventory)
-    # Company-scoped dropdowns
-    form.equipment_id.choices = [(0, '-- Select Equipment --')] + [(e.id, e.name) for e in filter_by_company(Equipment.query).order_by(Equipment.name).all()]
-    if form.validate_on_submit():
-        # ... update fields ...
+    
+    if request.method == 'POST':
+        data = request.form
+        inventory.part_number = data['part_number']
+        inventory.name = data['name']
+        inventory.description = data.get('description')
+        inventory.category = data.get('category')
+        inventory.manufacturer = data.get('manufacturer')
+        inventory.supplier = data.get('supplier')
+        inventory.unit_cost = data.get('unit_cost')
+        inventory.currency = data.get('currency', 'USD')
+        inventory.current_stock = data.get('current_stock', 0)
+        inventory.minimum_stock = data.get('minimum_stock', 0)
+        inventory.maximum_stock = data.get('maximum_stock')
+        inventory.unit_of_measure = data.get('unit_of_measure', 'pieces')
+        inventory.location = data.get('location')
+        inventory.is_active = 'is_active' in data
+        
         db.session.commit()
         flash('Inventory item updated!', 'success')
         return redirect(url_for('inventory_detail', id=inventory.id))
-    return render_template('inventory/edit.html', form=form, inventory=inventory)
+    
+    # Get categories and locations for the dropdowns
+    categories = filter_by_company(Category.query).filter_by(is_active=True).order_by(Category.name).all()
+    locations = filter_by_company(Location.query).order_by(Location.name).all()
+    return render_template('inventory/edit.html', inventory=inventory, categories=categories, locations=locations)
 
 # API routes
 @app.route('/api/equipment')
@@ -1937,10 +2165,14 @@ def create_team():
     if not user_has_permission(current_user, 'team_create'):
         abort(403)
     form = TeamForm()
-    form.members.choices = [(u.id, f"{u.first_name} {u.last_name} ({u.username})") for u in User.query.order_by(User.first_name, User.last_name).all()]
+    form.members.choices = [(u.id, f"{u.first_name} {u.last_name} ({u.username})") for u in filter_by_company(User.query).order_by(User.first_name, User.last_name).all()]
     if form.validate_on_submit():
-        team = Team(name=form.name.data, description=form.description.data)
-        team.members = User.query.filter(User.id.in_(form.members.data)).all()
+        team = Team(
+            company_id=current_user.company_id,
+            name=form.name.data, 
+            description=form.description.data
+        )
+        team.members = filter_by_company(User.query).filter(User.id.in_(form.members.data)).all()
         db.session.add(team)
         db.session.commit()
         flash('Team created!', 'success')
@@ -3107,8 +3339,11 @@ def admin_asset_management():
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('dashboard'))
     
-    # Get equipment data with company filtering
-    equipment = filter_by_company(Equipment.query).order_by(Equipment.name).all()
+    # Get equipment data with company filtering and eager loading of relationships
+    equipment = filter_by_company(Equipment.query).options(
+        db.joinedload(Equipment.location_info),
+        db.joinedload(Equipment.department_info)
+    ).order_by(Equipment.name).all()
     
     # Get inventory data with company filtering
     inventory = filter_by_company(Inventory.query).order_by(Inventory.name).all()
@@ -5658,6 +5893,11 @@ def user_has_permission(user, permission):
         return permission in perms
     print("[DEBUG] No permissions found. Denying access.")
     return False
+
+# Template context processor to make user_has_permission available in templates
+@app.context_processor
+def inject_user_has_permission():
+    return dict(user_has_permission=user_has_permission)
 
 @click.command('init-db')
 @with_appcontext

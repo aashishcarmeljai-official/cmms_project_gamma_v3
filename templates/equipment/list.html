@@ -80,6 +80,7 @@
                                     <th>Name</th>
                                     <th>Category</th>
                                     <th>Location</th>
+                                    <th>Department</th>
                                     <th>Status</th>
                                     <th>Criticality</th>
                                     <th>Actions</th>
@@ -103,7 +104,24 @@
                                     <td>
                                         <span class="badge bg-secondary">{{ eq.category }}</span>
                                     </td>
-                                    <td>{{ eq.location or 'N/A' }}</td>
+                                    <td>
+                                        {% if eq.location_info %}
+                                            {{ eq.location_info.name }}
+                                        {% elif eq.location %}
+                                            {{ eq.location }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if eq.department_info %}
+                                            {{ eq.department_info.name }}
+                                        {% elif eq.department %}
+                                            {{ eq.department }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <span class="badge bg-{{ 'success' if eq.status == 'operational' else 'warning' if eq.status == 'maintenance' else 'danger' }}">
                                             {{ eq.status.replace('_', ' ').title() }}
@@ -116,10 +134,13 @@
                                     </td>
                                     <td>
                                         <div class="btn-group" role="group">
-                                            <a href="/equipment/{{ eq.id }}" class="btn btn-sm btn-outline-primary">
+                                            <a href="/equipment/{{ eq.id }}" class="btn btn-sm btn-outline-primary" title="View Details">
                                                 <i class="fas fa-eye"></i>
                                             </a>
-                                            <a href="/work-orders/new?equipment_id={{ eq.id }}" class="btn btn-sm btn-outline-success">
+                                            <a href="/equipment/{{ eq.id }}/edit" class="btn btn-sm btn-outline-warning" title="Edit Equipment">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <a href="/work-orders/new?equipment_id={{ eq.id }}" class="btn btn-sm btn-outline-success" title="Create Work Order">
                                                 <i class="fas fa-plus"></i> WO
                                             </a>
                                             <button type="button" class="btn btn-sm btn-outline-danger" title="Delete Equipment" 
@@ -186,9 +207,9 @@
             const rows = table.querySelectorAll('tbody tr');
             
             rows.forEach(row => {
-                const statusCell = row.querySelector('td:nth-child(5)').textContent.toLowerCase();
+                const statusCell = row.querySelector('td:nth-child(6)').textContent.toLowerCase();
                 const categoryCell = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
-                const criticalityCell = row.querySelector('td:nth-child(6)').textContent.toLowerCase();
+                const criticalityCell = row.querySelector('td:nth-child(7)').textContent.toLowerCase();
                 const nameCell = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
                 const idCell = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
                 

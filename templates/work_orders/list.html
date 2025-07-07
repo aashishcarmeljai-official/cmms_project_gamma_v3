@@ -1,5 +1,64 @@
 {% extends 'base.html' %}
 {% block title %}Work Orders - CMMS{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmDelete(workOrderId, workOrderNumber) {
+    if (confirm(`Are you sure you want to delete work order ${workOrderNumber}? This action cannot be undone.`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/work-orders/${workOrderId}/delete`;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Filter functionality
+document.getElementById('statusFilter').addEventListener('change', function() {
+    filterWorkOrders();
+});
+
+document.getElementById('priorityFilter').addEventListener('change', function() {
+    filterWorkOrders();
+});
+
+document.getElementById('typeFilter').addEventListener('change', function() {
+    filterWorkOrders();
+});
+
+document.getElementById('searchInput').addEventListener('input', function() {
+    filterWorkOrders();
+});
+
+function filterWorkOrders() {
+    const statusFilter = document.getElementById('statusFilter').value;
+    const priorityFilter = document.getElementById('priorityFilter').value;
+    const typeFilter = document.getElementById('typeFilter').value;
+    const searchInput = document.getElementById('searchInput').value.toLowerCase();
+    
+    const rows = document.querySelectorAll('#workOrdersTable tbody tr');
+    
+    rows.forEach(row => {
+        const status = row.querySelector('td:nth-child(7) .badge').textContent.toLowerCase();
+        const priority = row.querySelector('td:nth-child(6) .badge').textContent.toLowerCase();
+        const type = row.querySelector('td:nth-child(8) .badge').textContent.toLowerCase();
+        const title = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+        const description = row.querySelector('td:nth-child(2) small').textContent.toLowerCase();
+        
+        const statusMatch = !statusFilter || status.includes(statusFilter);
+        const priorityMatch = !priorityFilter || priority.includes(priorityFilter);
+        const typeMatch = !typeFilter || type.includes(typeFilter);
+        const searchMatch = !searchInput || title.includes(searchInput) || description.includes(searchInput);
+        
+        if (statusMatch && priorityMatch && typeMatch && searchMatch) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+</script>
+{% endblock %}
 {% block content %}
 <!-- Page Header -->
 <div class="row mb-4">
@@ -27,9 +86,9 @@
                         <select class="form-select" id="statusFilter">
                             <option value="">All Status</option>
                             <option value="open">Open</option>
+                            <option value="on_hold">On Hold</option>
                             <option value="in_progress">In Progress</option>
                             <option value="completed">Completed</option>
-                            <option value="cancelled">Cancelled</option>
                         </select>
                     </div>
                     <div class="col-md-3">
@@ -78,6 +137,7 @@
                                     <th>Work Order #</th>
                                     <th>Title</th>
                                     <th>Equipment</th>
+                                    <th>Location</th>
                                     <th>Assigned To</th>
                                     <th>Priority</th>
                                     <th>Status</th>
@@ -100,6 +160,7 @@
                                         <small class="text-muted">{{ wo.description[:50] }}{% if wo.description|length > 50 %}...{% endif %}</small>
                                     </td>
                                     <td>{{ wo.equipment.name if wo.equipment else 'N/A' }}</td>
+                                    <td>{{ wo.location.name if wo.location else (wo.equipment.location or 'Not specified') }}</td>
                                     <td>
                                         {% if wo.assigned_technician %}
                                             {{ wo.assigned_technician.first_name }} {{ wo.assigned_technician.last_name }}
@@ -113,7 +174,7 @@
                                         </span>
                                     </td>
                                     <td>
-                                        <span class="badge bg-{{ 'success' if wo.status == 'completed' else 'warning' if wo.status == 'in_progress' else 'danger' if wo.status == 'cancelled' else 'secondary' }}">
+                                        <span class="badge bg-{{ 'success' if wo.status == 'completed' else 'warning' if wo.status == 'in_progress' else 'danger' if wo.status == 'on_hold' else 'secondary' }}">
                                             {{ wo.status.replace('_', ' ').title() }}
                                         </span>
                                     </td>
@@ -136,6 +197,17 @@
                                             <a href="/work-orders/{{ wo.id }}" class="btn btn-sm btn-outline-primary" title="View Details">
                                                 <i class="fas fa-eye"></i>
                                             </a>
+                                            {% if user_has_permission(current_user, 'workorder_edit') %}
+                                                <a href="/work-orders/{{ wo.id }}/edit" class="btn btn-sm btn-outline-warning" title="Edit Work Order">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                            {% endif %}
+                                            {% if user_has_permission(current_user, 'workorder_delete') %}
+                                                <button type="button" class="btn btn-sm btn-outline-danger" title="Delete Work Order" 
+                                                        onclick="confirmDelete({{ wo.id }}, '{{ wo.work_order_number }}')">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            {% endif %}
                                             {% if wo.status == 'open' %}
                                                 <a href="/work-orders/{{ wo.id }}/update-status" class="btn btn-sm btn-outline-success" title="Start Work" onclick="return confirm('Start this work order?')">
                                                     <i class="fas fa-play"></i>

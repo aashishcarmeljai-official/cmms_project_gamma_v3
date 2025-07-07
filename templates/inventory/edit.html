@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Inventory Item - CMMS{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/inventory">Inventory</a></li>
+                <li class="breadcrumb-item"><a href="/inventory/{{ inventory.id }}">{{ inventory.name }}</a></li>
+                <li class="breadcrumb-item active">Edit</li>
+            </ol>
+        </nav>
+        <h1 class="h3 mb-0">
+            <i class="fas fa-edit text-primary me-2"></i>
+            Edit Inventory Item
+        </h1>
+        <p class="text-muted">Update inventory item details</p>
+    </div>
+</div>
+
+<!-- Inventory Form -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-box me-2"></i>Inventory Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/inventory/{{ inventory.id }}/edit">
+                    <div class="row">
+                        <!-- Basic Information -->
+                        <div class="col-md-6">
+                            <h6 class="mb-3">Basic Information</h6>
+                            
+                            <div class="mb-3">
+                                <label for="part_number" class="form-label">Part Number *</label>
+                                <input type="text" class="form-control" id="part_number" name="part_number" value="{{ inventory.part_number }}" required>
+                                <div class="form-text">Unique identifier for the part</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Item Name *</label>
+                                <input type="text" class="form-control" id="name" name="name" value="{{ inventory.name }}" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="category" class="form-label">Category</label>
+                                <div class="input-group">
+                                    <select class="form-select" id="category" name="category">
+                                        <option value="">Select Category</option>
+                                        {% for category in categories %}
+                                            {% if category.type == 'inventory' and category.is_active %}
+                                                <option value="{{ category.name }}" {% if inventory.category == category.name %}selected{% endif %}>{{ category.name }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text">Select an existing category or add a new one</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="description" class="form-label">Description</label>
+                                <textarea class="form-control" id="description" name="description" rows="3" placeholder="Brief description of the item">{{ inventory.description or '' }}</textarea>
+                            </div>
+                        </div>
+                        
+                        <!-- Supplier Information -->
+                        <div class="col-md-6">
+                            <h6 class="mb-3">Supplier Information</h6>
+                            
+                            <div class="mb-3">
+                                <label for="manufacturer" class="form-label">Manufacturer</label>
+                                <input type="text" class="form-control" id="manufacturer" name="manufacturer" value="{{ inventory.manufacturer or '' }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="supplier" class="form-label">Supplier</label>
+                                <input type="text" class="form-control" id="supplier" name="supplier" value="{{ inventory.supplier or '' }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="unit_cost" class="form-label">Unit Cost</label>
+                                <div class="input-group">
+                                    <select class="form-select" id="currency" name="currency" style="max-width: 120px;">
+                                        <option value="USD" {% if inventory.currency == 'USD' %}selected{% endif %}>USD ($)</option>
+                                        <option value="EUR" {% if inventory.currency == 'EUR' %}selected{% endif %}>EUR (€)</option>
+                                        <option value="GBP" {% if inventory.currency == 'GBP' %}selected{% endif %}>GBP (£)</option>
+                                        <option value="CAD" {% if inventory.currency == 'CAD' %}selected{% endif %}>CAD (C$)</option>
+                                        <option value="AUD" {% if inventory.currency == 'AUD' %}selected{% endif %}>AUD (A$)</option>
+                                        <option value="JPY" {% if inventory.currency == 'JPY' %}selected{% endif %}>JPY (¥)</option>
+                                        <option value="CHF" {% if inventory.currency == 'CHF' %}selected{% endif %}>CHF (CHF)</option>
+                                        <option value="CNY" {% if inventory.currency == 'CNY' %}selected{% endif %}>CNY (¥)</option>
+                                        <option value="INR" {% if inventory.currency == 'INR' %}selected{% endif %}>INR (₹)</option>
+                                        <option value="BRL" {% if inventory.currency == 'BRL' %}selected{% endif %}>BRL (R$)</option>
+                                        <option value="MXN" {% if inventory.currency == 'MXN' %}selected{% endif %}>MXN ($)</option>
+                                        <option value="SGD" {% if inventory.currency == 'SGD' %}selected{% endif %}>SGD (S$)</option>
+                                        <option value="HKD" {% if inventory.currency == 'HKD' %}selected{% endif %}>HKD (HK$)</option>
+                                        <option value="NOK" {% if inventory.currency == 'NOK' %}selected{% endif %}>NOK (kr)</option>
+                                        <option value="SEK" {% if inventory.currency == 'SEK' %}selected{% endif %}>SEK (kr)</option>
+                                        <option value="DKK" {% if inventory.currency == 'DKK' %}selected{% endif %}>DKK (kr)</option>
+                                        <option value="PLN" {% if inventory.currency == 'PLN' %}selected{% endif %}>PLN (zł)</option>
+                                        <option value="CZK" {% if inventory.currency == 'CZK' %}selected{% endif %}>CZK (Kč)</option>
+                                        <option value="HUF" {% if inventory.currency == 'HUF' %}selected{% endif %}>HUF (Ft)</option>
+                                        <option value="RUB" {% if inventory.currency == 'RUB' %}selected{% endif %}>RUB (₽)</option>
+                                        <option value="TRY" {% if inventory.currency == 'TRY' %}selected{% endif %}>TRY (₺)</option>
+                                        <option value="ZAR" {% if inventory.currency == 'ZAR' %}selected{% endif %}>ZAR (R)</option>
+                                        <option value="KRW" {% if inventory.currency == 'KRW' %}selected{% endif %}>KRW (₩)</option>
+                                        <option value="THB" {% if inventory.currency == 'THB' %}selected{% endif %}>THB (฿)</option>
+                                        <option value="MYR" {% if inventory.currency == 'MYR' %}selected{% endif %}>MYR (RM)</option>
+                                        <option value="IDR" {% if inventory.currency == 'IDR' %}selected{% endif %}>IDR (Rp)</option>
+                                        <option value="PHP" {% if inventory.currency == 'PHP' %}selected{% endif %}>PHP (₱)</option>
+                                        <option value="VND" {% if inventory.currency == 'VND' %}selected{% endif %}>VND (₫)</option>
+                                        <option value="EGP" {% if inventory.currency == 'EGP' %}selected{% endif %}>EGP (E£)</option>
+                                        <option value="NGN" {% if inventory.currency == 'NGN' %}selected{% endif %}>NGN (₦)</option>
+                                        <option value="KES" {% if inventory.currency == 'KES' %}selected{% endif %}>KES (KSh)</option>
+                                        <option value="GHS" {% if inventory.currency == 'GHS' %}selected{% endif %}>GHS (GH₵)</option>
+                                        <option value="UGX" {% if inventory.currency == 'UGX' %}selected{% endif %}>UGX (USh)</option>
+                                        <option value="TZS" {% if inventory.currency == 'TZS' %}selected{% endif %}>TZS (TSh)</option>
+                                        <option value="ZMW" {% if inventory.currency == 'ZMW' %}selected{% endif %}>ZMW (ZK)</option>
+                                        <option value="BWP" {% if inventory.currency == 'BWP' %}selected{% endif %}>BWP (P)</option>
+                                        <option value="NAD" {% if inventory.currency == 'NAD' %}selected{% endif %}>NAD (N$)</option>
+                                        <option value="MUR" {% if inventory.currency == 'MUR' %}selected{% endif %}>MUR (₨)</option>
+                                        <option value="SCR" {% if inventory.currency == 'SCR' %}selected{% endif %}>SCR (₨)</option>
+                                        <option value="SZL" {% if inventory.currency == 'SZL' %}selected{% endif %}>SZL (E)</option>
+                                        <option value="LSL" {% if inventory.currency == 'LSL' %}selected{% endif %}>LSL (L)</option>
+                                        <option value="MWK" {% if inventory.currency == 'MWK' %}selected{% endif %}>MWK (MK)</option>
+                                        <option value="ZWL" {% if inventory.currency == 'ZWL' %}selected{% endif %}>ZWL (Z$)</option>
+                                    </select>
+                                    <input type="number" class="form-control" id="unit_cost" name="unit_cost" step="0.01" min="0" placeholder="0.00" value="{{ inventory.unit_cost or '' }}">
+                                </div>
+                                <div class="form-text">Select currency and enter the unit cost</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="unit_of_measure" class="form-label">Unit of Measure</label>
+                                <select class="form-select" id="unit_of_measure" name="unit_of_measure">
+                                    <option value="pieces" {% if inventory.unit_of_measure == 'pieces' %}selected{% endif %}>Pieces</option>
+                                    <option value="boxes" {% if inventory.unit_of_measure == 'boxes' %}selected{% endif %}>Boxes</option>
+                                    <option value="pairs" {% if inventory.unit_of_measure == 'pairs' %}selected{% endif %}>Pairs</option>
+                                    <option value="sets" {% if inventory.unit_of_measure == 'sets' %}selected{% endif %}>Sets</option>
+                                    <option value="meters" {% if inventory.unit_of_measure == 'meters' %}selected{% endif %}>Meters</option>
+                                    <option value="feet" {% if inventory.unit_of_measure == 'feet' %}selected{% endif %}>Feet</option>
+                                    <option value="liters" {% if inventory.unit_of_measure == 'liters' %}selected{% endif %}>Liters</option>
+                                    <option value="gallons" {% if inventory.unit_of_measure == 'gallons' %}selected{% endif %}>Gallons</option>
+                                    <option value="kilograms" {% if inventory.unit_of_measure == 'kilograms' %}selected{% endif %}>Kilograms</option>
+                                    <option value="pounds" {% if inventory.unit_of_measure == 'pounds' %}selected{% endif %}>Pounds</option>
+                                    <option value="rolls" {% if inventory.unit_of_measure == 'rolls' %}selected{% endif %}>Rolls</option>
+                                    <option value="sheets" {% if inventory.unit_of_measure == 'sheets' %}selected{% endif %}>Sheets</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Stock Management -->
+                    <div class="row">
+                        <div class="col-12">
+                            <h6 class="mb-3">Stock Management</h6>
+                            
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="current_stock" class="form-label">Current Stock</label>
+                                        <input type="number" class="form-control" id="current_stock" name="current_stock" value="{{ inventory.current_stock or 0 }}" min="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="minimum_stock" class="form-label">Minimum Stock</label>
+                                        <input type="number" class="form-control" id="minimum_stock" name="minimum_stock" value="{{ inventory.minimum_stock or 0 }}" min="0">
+                                        <div class="form-text">Reorder point</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="maximum_stock" class="form-label">Maximum Stock</label>
+                                        <input type="number" class="form-control" id="maximum_stock" name="maximum_stock" value="{{ inventory.maximum_stock or '' }}" min="0">
+                                        <div class="form-text">Optional - for space planning</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="location" class="form-label">Storage Location</label>
+                                <select class="form-select" id="location" name="location">
+                                    <option value="">Select Location</option>
+                                    {% for location in locations %}
+                                    <option value="{{ location.name }}" {% if inventory.location == location.name %}selected{% endif %}>{{ location.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">Choose from available locations or leave blank</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {% if inventory.is_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_active">
+                                        Active
+                                    </label>
+                                    <div class="form-text">Uncheck to deactivate this inventory item</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Form Actions -->
+                    <div class="row">
+                        <div class="col-12">
+                            <hr class="my-4">
+                            <div class="d-flex justify-content-between">
+                                <a href="/inventory/{{ inventory.id }}" class="btn btn-secondary">
+                                    <i class="fas fa-arrow-left me-2"></i>Cancel
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save me-2"></i>Update Inventory Item
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Category Modal -->
+<div class="modal fade" id="addCategoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Category</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addCategoryForm">
+                    <div class="mb-3">
+                        <label for="newCategoryName" class="form-label">Category Name *</label>
+                        <input type="text" class="form-control" id="newCategoryName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newCategoryType" class="form-label">Type *</label>
+                        <select class="form-select" id="newCategoryType" required>
+                            <option value="equipment">Equipment</option>
+                            <option value="inventory" selected>Inventory</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newCategoryDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="newCategoryDescription" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newCategoryColor" class="form-label">Color</label>
+                        <input type="color" class="form-control form-control-color" id="newCategoryColor" value="#007bff">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addNewCategory()">Add Category</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Add new category function
+    function addNewCategory() {
+        const name = document.getElementById('newCategoryName').value.trim();
+        const type = document.getElementById('newCategoryType').value;
+        const description = document.getElementById('newCategoryDescription').value.trim();
+        const color = document.getElementById('newCategoryColor').value;
+        
+        if (!name) {
+            alert('Please enter a category name');
+            return;
+        }
+        
+        // Create form data
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('type', type);
+        formData.append('description', description);
+        formData.append('color', color);
+        
+        // Send AJAX request
+        fetch('/categories/new', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Add new option to select
+                const categorySelect = document.getElementById('category');
+                const newOption = document.createElement('option');
+                newOption.value = name;
+                newOption.textContent = name;
+                categorySelect.appendChild(newOption);
+                categorySelect.value = name;
+                
+                // Close modal and reset form
+                bootstrap.Modal.getInstance(document.getElementById('addCategoryModal')).hide();
+                document.getElementById('addCategoryForm').reset();
+                document.getElementById('newCategoryColor').value = '#007bff';
+                
+                alert('Category added successfully!');
+            } else {
+                alert('Error: ' + (data.error || 'Failed to add category'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error adding category. Please try again.');
+        });
+    }
+    
+    // Form validation
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const partNumber = document.getElementById('part_number').value.trim();
+        const name = document.getElementById('name').value.trim();
+        
+        if (!partNumber || !name) {
+            e.preventDefault();
+            alert('Please fill in all required fields.');
+            return false;
+        }
+        
+        // Validate stock levels
+        const currentStock = parseInt(document.getElementById('current_stock').value) || 0;
+        const minStock = parseInt(document.getElementById('minimum_stock').value) || 0;
+        const maxStock = parseInt(document.getElementById('maximum_stock').value) || 0;
+        
+        if (maxStock > 0 && currentStock > maxStock) {
+            e.preventDefault();
+            alert('Current stock cannot be greater than maximum stock.');
+            return false;
+        }
+        
+        if (maxStock > 0 && minStock > maxStock) {
+            e.preventDefault();
+            alert('Minimum stock cannot be greater than maximum stock.');
+            return false;
+        }
+    });
+    
+    // Stock level validation
+    document.getElementById('minimum_stock').addEventListener('input', function() {
+        const minStock = parseInt(this.value) || 0;
+        const maxStock = parseInt(document.getElementById('maximum_stock').value) || 0;
+        
+        if (maxStock > 0 && minStock > maxStock) {
+            this.setCustomValidity('Minimum stock cannot be greater than maximum stock');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+    
+    document.getElementById('maximum_stock').addEventListener('input', function() {
+        const maxStock = parseInt(this.value) || 0;
+        const minStock = parseInt(document.getElementById('minimum_stock').value) || 0;
+        const currentStock = parseInt(document.getElementById('current_stock').value) || 0;
+        
+        if (maxStock > 0 && minStock > maxStock) {
+            this.setCustomValidity('Maximum stock cannot be less than minimum stock');
+        } else if (maxStock > 0 && currentStock > maxStock) {
+            this.setCustomValidity('Maximum stock cannot be less than current stock');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+</script>
+{% endblock %} 

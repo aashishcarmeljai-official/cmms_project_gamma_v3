@@ -55,8 +55,11 @@
                         <p class="text-muted mb-0">{{ inventory.part_number }} • {{ inventory.category or 'No category' }}</p>
                     </div>
                     <div class="d-flex gap-2">
-                        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#adjustStockModal">
-                            <i class="fas fa-edit me-2"></i>Adjust Stock
+                        <a href="/inventory/{{ inventory.id }}/edit" class="btn btn-warning">
+                            <i class="fas fa-edit me-2"></i>Edit Item
+                        </a>
+                        <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#adjustStockModal">
+                            <i class="fas fa-plus-minus me-2"></i>Adjust Stock
                         </button>
                         <a href="/inventory" class="btn btn-secondary">
                             <i class="fas fa-arrow-left me-2"></i>Back to List
@@ -219,8 +222,11 @@
                     </div>
                     <div class="card-body">
                         <div class="d-grid gap-2">
-                            <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#adjustStockModal">
-                                <i class="fas fa-edit me-2"></i>Adjust Stock
+                            <a href="/inventory/{{ inventory.id }}/edit" class="btn btn-warning">
+                                <i class="fas fa-edit me-2"></i>Edit Item
+                            </a>
+                            <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#adjustStockModal">
+                                <i class="fas fa-plus-minus me-2"></i>Adjust Stock
                             </button>
                             <a href="/work-orders/new" class="btn btn-outline-primary">
                                 <i class="fas fa-plus me-2"></i>Create Work Order

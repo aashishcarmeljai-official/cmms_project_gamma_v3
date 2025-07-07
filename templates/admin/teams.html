@@ -347,12 +347,25 @@
                     
                     <div class="mb-3">
                         <label for="teamMembers" class="form-label">Add Members</label>
-                        <select class="form-select" id="teamMembers" name="members" multiple>
+                        <div class="mb-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="selectAllMembers()">
+                                <i class="fas fa-check-square me-1"></i>Select All
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllMembers()">
+                                <i class="fas fa-square me-1"></i>Clear All
+                            </button>
+                        </div>
+                        <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
                             {% for technician in technicians %}
-                            <option value="{{ technician.id }}">{{ technician.first_name }} {{ technician.last_name }} ({{ technician.role|capitalize }})</option>
+                            <div class="form-check">
+                                <input class="form-check-input member-checkbox" type="checkbox" name="members" value="{{ technician.id }}" id="member_{{ technician.id }}">
+                                <label class="form-check-label" for="member_{{ technician.id }}">
+                                    {{ technician.first_name }} {{ technician.last_name }} ({{ technician.role|capitalize }})
+                                </label>
+                            </div>
                             {% endfor %}
-                        </select>
-                        <div class="form-text">Hold Ctrl/Cmd to select multiple members</div>
+                        </div>
+                        <div class="form-text">Select team members by checking the boxes</div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -995,5 +1008,20 @@ document.addEventListener('DOMContentLoaded', function() {
         filter.style.display = 'none';
     });
 });
+
+// Member selection functions
+function selectAllMembers() {
+    const checkboxes = document.querySelectorAll('.member-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+}
+
+function clearAllMembers() {
+    const checkboxes = document.querySelectorAll('.member-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+}
 </script>
 {% endblock %} 

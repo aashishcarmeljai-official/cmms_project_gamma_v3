@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}New Work Order{% endblock %}
+{% block title %}Edit Work Order - CMMS{% endblock %}
 {% block extra_head %}
 <style>
 .media-upload-section {
@@ -71,22 +71,6 @@
     margin-right: 8px;
 }
 
-.upload-progress {
-    width: 100%;
-    height: 4px;
-    background: #e9ecef;
-    border-radius: 2px;
-    margin-top: 10px;
-    overflow: hidden;
-}
-
-.upload-progress-bar {
-    height: 100%;
-    background: #28a745;
-    width: 0%;
-    transition: width 0.3s;
-}
-
 .voice-recorder {
     background: #fff;
     border: 2px solid #007bff;
@@ -126,6 +110,18 @@
     color: #dc3545;
 }
 
+.existing-media {
+    background: #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 15px 0;
+}
+
+.existing-media h6 {
+    color: #495057;
+    margin-bottom: 10px;
+}
+
 @media (max-width: 768px) {
     .media-upload-section {
         padding: 15px;
@@ -148,13 +144,31 @@
 </style>
 {% endblock %}
 {% block content %}
+<!-- Page Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/work-orders">Work Orders</a></li>
+                <li class="breadcrumb-item"><a href="/work-orders/{{ work_order.id }}">{{ work_order.work_order_number }}</a></li>
+                <li class="breadcrumb-item active">Edit</li>
+            </ol>
+        </nav>
+        <h1 class="h3 mb-0">
+            <i class="fas fa-edit text-primary me-2"></i>
+            Edit Work Order
+        </h1>
+        <p class="text-muted">Update work order details and assignments</p>
+    </div>
+</div>
+
 <div class="container mt-4">
     <div class="row justify-content-center">
         <div class="col-lg-8">
             <div class="card shadow">
                 <div class="card-header">
                     <h3 class="mb-0">
-                        <i class="fas fa-plus-circle text-primary me-2"></i>Create New Work Order
+                        <i class="fas fa-edit text-primary me-2"></i>Edit Work Order: {{ work_order.work_order_number }}
                     </h3>
                 </div>
                 <div class="card-body">
@@ -164,17 +178,17 @@
                             <div class="col-md-8">
                                 <div class="mb-3">
                                     <label for="title" class="form-label">Title *</label>
-                                    <input type="text" class="form-control" id="title" name="title" required>
+                                    <input type="text" class="form-control" id="title" name="title" value="{{ work_order.title }}" required>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3">
                                     <label for="priority" class="form-label">Priority</label>
                                     <select class="form-select" id="priority" name="priority">
-                                        <option value="low">Low</option>
-                                        <option value="medium" selected>Medium</option>
-                                        <option value="high">High</option>
-                                        <option value="urgent">Urgent</option>
+                                        <option value="low" {% if work_order.priority == 'low' %}selected{% endif %}>Low</option>
+                                        <option value="medium" {% if work_order.priority == 'medium' %}selected{% endif %}>Medium</option>
+                                        <option value="high" {% if work_order.priority == 'high' %}selected{% endif %}>High</option>
+                                        <option value="urgent" {% if work_order.priority == 'urgent' %}selected{% endif %}>Urgent</option>
                                     </select>
                                 </div>
                             </div>
@@ -187,7 +201,7 @@
                                     <select class="form-select" id="equipment_id" name="equipment_id" required>
                                         <option value="">Select Equipment</option>
                                         {% for eq in equipment %}
-                                        <option value="{{ eq.id }}">{{ eq.name }} ({{ eq.equipment_id }})</option>
+                                        <option value="{{ eq.id }}" {% if work_order.equipment_id == eq.id %}selected{% endif %}>{{ eq.name }} ({{ eq.equipment_id }})</option>
                                         {% endfor %}
                                     </select>
                                 </div>
@@ -198,7 +212,7 @@
                                     <select class="form-select" id="location_id" name="location_id">
                                         <option value="">Select Location</option>
                                         {% for location in locations %}
-                                        <option value="{{ location.id }}">{{ location.name }}</option>
+                                        <option value="{{ location.id }}" {% if work_order.location_id == location.id %}selected{% endif %}>{{ location.name }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
@@ -210,9 +224,9 @@
                                 <div class="mb-3">
                                     <label for="type" class="form-label">Type</label>
                                     <select class="form-select" id="type" name="type">
-                                        <option value="corrective" selected>Corrective</option>
-                                        <option value="preventive">Preventive</option>
-                                        <option value="emergency">Emergency</option>
+                                        <option value="corrective" {% if work_order.type == 'corrective' %}selected{% endif %}>Corrective</option>
+                                        <option value="preventive" {% if work_order.type == 'preventive' %}selected{% endif %}>Preventive</option>
+                                        <option value="emergency" {% if work_order.type == 'emergency' %}selected{% endif %}>Emergency</option>
                                     </select>
                                 </div>
                             </div>
@@ -221,13 +235,69 @@
                         <div class="mb-3">
                             <label for="description" class="form-label">Description *</label>
                             <textarea class="form-control" id="description" name="description" rows="4" required 
-                                      placeholder="Describe the issue or maintenance task..."></textarea>
+                                      placeholder="Describe the issue or maintenance task...">{{ work_order.description }}</textarea>
                         </div>
+
+                        <!-- Existing Media Section -->
+                        {% if work_order.images or work_order.videos or work_order.voice_notes %}
+                        <div class="existing-media">
+                            <h6><i class="fas fa-images me-2"></i>Existing Media</h6>
+                            
+                            {% if work_order.images %}
+                            <div class="mb-3">
+                                <strong>Photos:</strong>
+                                <div class="media-preview">
+                                    {% for image in work_order.images.split(',') %}
+                                    {% if image %}
+                                    <div class="media-item">
+                                        <img src="{{ image }}" alt="Work Order Image">
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if work_order.videos %}
+                            <div class="mb-3">
+                                <strong>Videos:</strong>
+                                <div class="media-preview">
+                                    {% for video in work_order.videos.split(',') %}
+                                    {% if video %}
+                                    <div class="media-item">
+                                        <video controls>
+                                            <source src="{{ video }}" type="video/mp4">
+                                        </video>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if work_order.voice_notes %}
+                            <div class="mb-3">
+                                <strong>Voice Notes:</strong>
+                                <div class="media-preview">
+                                    {% for voice in work_order.voice_notes.split(',') %}
+                                    {% if voice %}
+                                    <div class="media-item audio">
+                                        <audio controls style="width: 100%; height: 100%;">
+                                            <source src="{{ voice }}" type="audio/wav">
+                                        </audio>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
 
                         <!-- Media Upload Section -->
                         <div class="media-upload-section">
-                            <h5><i class="fas fa-camera me-2"></i>Media Upload</h5>
-                            <p class="text-muted">Add photos, videos, or voice notes to document the issue or task</p>
+                            <h5><i class="fas fa-camera me-2"></i>Add More Media</h5>
+                            <p class="text-muted">Add additional photos, videos, or voice notes</p>
                             
                             <!-- Photo Upload -->
                             <div class="mb-4">
@@ -275,7 +345,7 @@
                                     <select class="form-select" id="assigned_technician_id" name="assigned_technician_id">
                                         <option value="">Select Technician</option>
                                         {% for tech in technicians %}
-                                        <option value="{{ tech.id }}">{{ tech.first_name }} {{ tech.last_name }}</option>
+                                        <option value="{{ tech.id }}" {% if work_order.assigned_technician_id == tech.id %}selected{% endif %}>{{ tech.first_name }} {{ tech.last_name }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
@@ -286,7 +356,7 @@
                                     <select class="form-select" id="assigned_team_id" name="assigned_team_id">
                                         <option value="">Select Team</option>
                                         {% for team in teams %}
-                                        <option value="{{ team.id }}">{{ team.name }}</option>
+                                        <option value="{{ team.id }}" {% if work_order.assigned_team_id == team.id %}selected{% endif %}>{{ team.name }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
@@ -297,26 +367,29 @@
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="scheduled_date" class="form-label">Scheduled Date</label>
-                                    <input type="datetime-local" class="form-control" id="scheduled_date" name="scheduled_date">
+                                    <input type="datetime-local" class="form-control" id="scheduled_date" name="scheduled_date" 
+                                           value="{{ work_order.scheduled_date.strftime('%Y-%m-%dT%H:%M') if work_order.scheduled_date else '' }}">
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="due_date" class="form-label">Due Date</label>
-                                    <input type="datetime-local" class="form-control" id="due_date" name="due_date">
+                                    <input type="datetime-local" class="form-control" id="due_date" name="due_date"
+                                           value="{{ work_order.due_date.strftime('%Y-%m-%dT%H:%M') if work_order.due_date else '' }}">
                                 </div>
                             </div>
                         </div>
 
                         <div class="mb-3">
                             <label for="estimated_duration" class="form-label">Estimated Duration (minutes)</label>
-                            <input type="number" class="form-control" id="estimated_duration" name="estimated_duration" min="1">
+                            <input type="number" class="form-control" id="estimated_duration" name="estimated_duration" min="1" 
+                                   value="{{ work_order.estimated_duration or '' }}">
                         </div>
 
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                            <a href="{{ url_for('work_orders_list') }}" class="btn btn-secondary me-md-2">Cancel</a>
+                            <a href="{{ url_for('work_order_detail', id=work_order.id) }}" class="btn btn-secondary me-md-2">Cancel</a>
                             <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save me-2"></i>Create Work Order
+                                <i class="fas fa-save me-2"></i>Update Work Order
                             </button>
                         </div>
                     </form>
@@ -325,7 +398,9 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
 let mediaRecorder;
 let audioChunks = [];
@@ -478,7 +553,7 @@ document.getElementById('workOrderForm').addEventListener('submit', function(e) 
     const submitBtn = this.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
     
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating...';
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Updating...';
     submitBtn.disabled = true;
     
     // Re-enable after a delay (in case of validation errors)

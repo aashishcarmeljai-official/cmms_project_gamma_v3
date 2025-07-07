@@ -119,6 +119,7 @@
                                         <th>Name</th>
                                         <th>Category</th>
                                         <th>Location</th>
+                                        <th>Department</th>
                                         <th>Status</th>
                                         <th>Criticality</th>
                                         <th>Actions</th>
@@ -142,7 +143,24 @@
                                         <td>
                                             <span class="badge bg-secondary">{{ eq.category }}</span>
                                         </td>
-                                        <td>{{ eq.location or 'N/A' }}</td>
+                                        <td>
+                                            {% if eq.location_info %}
+                                                {{ eq.location_info.name }}
+                                            {% elif eq.location %}
+                                                {{ eq.location }}
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if eq.department_info %}
+                                                {{ eq.department_info.name }}
+                                            {% elif eq.department %}
+                                                {{ eq.department }}
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
+                                        </td>
                                         <td>
                                             <span class="badge bg-{{ 'success' if eq.status == 'operational' else 'warning' if eq.status == 'maintenance' else 'danger' }}">
                                                 {{ eq.status.replace('_', ' ').title() }}
