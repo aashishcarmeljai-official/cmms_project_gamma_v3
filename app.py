@@ -5866,6 +5866,72 @@ def vendor_detail(vendor_id):
     vendor = Vendor.query.filter_by(id=vendor_id, company_id=current_user.company_id).first_or_404()
     return render_template('vendors/detail.html', vendor=vendor)
 
+@app.route('/vendors/<int:vendor_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_vendor(vendor_id):
+    vendor = Vendor.query.filter_by(id=vendor_id, company_id=current_user.company_id).first_or_404()
+    equipment_list = Equipment.query.filter_by(company_id=current_user.company_id).all()
+    inventory_list = Inventory.query.filter_by(company_id=current_user.company_id).all()
+    locations = Location.query.filter_by(company_id=current_user.company_id).all()
+    if request.method == 'POST':
+        vendor.name = request.form.get('name')
+        vendor.description = request.form.get('description')
+        vendor.location_id = request.form.get('location_id') or None
+        # Update contacts
+        vendor.contacts.clear()
+        contact_names = request.form.getlist('contact_name')
+        contact_emails = request.form.getlist('contact_email')
+        contact_phones = request.form.getlist('contact_phone')
+        contact_positions = request.form.getlist('contact_position')
+        for i in range(len(contact_names)):
+            if contact_names[i]:
+                vendor.contacts.append(VendorContact(
+                    name=contact_names[i],
+                    email=contact_emails[i],
+                    phone=contact_phones[i],
+                    position=contact_positions[i],
+                    company_id=current_user.company_id
+                ))
+        # Update equipment association
+        vendor.equipment.clear()
+        equipment_ids = request.form.getlist('equipment')
+        for eq_id in equipment_ids:
+            eq = Equipment.query.filter_by(id=eq_id, company_id=current_user.company_id).first()
+            if eq:
+                vendor.equipment.append(eq)
+        # Update inventory association
+        vendor.inventory.clear()
+        inventory_ids = request.form.getlist('inventory')
+        for inv_id in inventory_ids:
+            inv = Inventory.query.filter_by(id=inv_id, company_id=current_user.company_id).first()
+            if inv:
+                vendor.inventory.append(inv)
+        # Handle new file uploads
+        files = request.files.getlist('files')
+        for file in files:
+            if file and file.filename:
+                filepath = os.path.join('uploads/vendors', file.filename)
+                file.save(filepath)
+                vendor_file = VendorFile(
+                    vendor_id=vendor.id,
+                    filename=file.filename,
+                    filepath=filepath
+                )
+                db.session.add(vendor_file)
+        db.session.commit()
+        flash('Vendor updated successfully!', 'success')
+        return redirect(url_for('vendor_detail', vendor_id=vendor.id))
+    return render_template('vendors/new.html', vendor=vendor, equipment_list=equipment_list, inventory_list=inventory_list, locations=locations, edit_mode=True)
+
+@app.route('/vendors/<int:vendor_id>/delete', methods=['POST'])
+@login_required
+def delete_vendor(vendor_id):
+    vendor = Vendor.query.filter_by(id=vendor_id, company_id=current_user.company_id).first_or_404()
+    db.session.delete(vendor)
+    db.session.commit()
+    flash('Vendor deleted successfully!', 'success')
+    return redirect(url_for('vendors'))
+
 # Helper function to send email
 def send_email(subject, recipients, body, html=None):
     msg = Message(subject, recipients=recipients, body=body, html=html)

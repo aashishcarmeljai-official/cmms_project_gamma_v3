@@ -180,6 +180,8 @@ class Equipment(db.Model):
     last_maintenance_date = db.Column(db.DateTime)  # Last maintenance performed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_by = db.relationship('User', backref=db.backref('created_equipment', lazy=True))
     
     # Relationships
     work_orders = db.relationship('WorkOrder', backref='equipment', lazy=True)
@@ -210,7 +212,9 @@ class Equipment(db.Model):
             'specifications': self.specifications,
             'last_maintenance_date': self.last_maintenance_date.isoformat() if self.last_maintenance_date else None,
             'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
+            'updated_at': self.updated_at.isoformat(),
+            'created_by_id': self.created_by_id,
+            'created_by_name': f"{self.created_by.first_name} {self.created_by.last_name}" if self.created_by else None
         }
 
 class WorkOrder(db.Model):

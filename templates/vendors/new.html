@@ -3,83 +3,145 @@
 {% block content %}
 <div class="container">
     <h1 class="h3 mb-4">Add Vendor</h1>
-    <form method="POST" enctype="multipart/form-data">
+    <form method="POST" enctype="multipart/form-data" action="{% if edit_mode %}{{ url_for('edit_vendor', vendor_id=vendor.id) }}{% else %}{{ url_for('add_vendor') }}{% endif %}">
+        <!-- Name -->
         <div class="mb-3">
             <label for="name" class="form-label">Vendor Name *</label>
-            <input type="text" class="form-control" id="name" name="name" required>
+            <input type="text" class="form-control" id="name" name="name" required value="{{ vendor.name if edit_mode else '' }}">
         </div>
+        <!-- Description -->
         <div class="mb-3">
             <label for="description" class="form-label">Description</label>
-            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+            <textarea class="form-control" id="description" name="description">{{ vendor.description if edit_mode else '' }}</textarea>
         </div>
+        <!-- Location -->
         <div class="mb-3">
             <label for="location_id" class="form-label">Location</label>
             <select class="form-select" id="location_id" name="location_id">
                 <option value="">Select Location</option>
                 {% for loc in locations %}
-                    <option value="{{ loc.id }}">{{ loc.name }}</option>
+                <option value="{{ loc.id }}" {% if edit_mode and vendor.location_id == loc.id %}selected{% endif %}>{{ loc.name }}</option>
                 {% endfor %}
             </select>
         </div>
+        <!-- Contacts -->
         <div class="mb-3">
             <label class="form-label">Contacts</label>
-            <div id="contacts-list">
-                <div class="row g-2 mb-2 contact-row">
-                    <div class="col-md-3"><input type="text" class="form-control" name="contact_name" placeholder="Name"></div>
-                    <div class="col-md-3"><input type="email" class="form-control" name="contact_email" placeholder="Email"></div>
-                    <div class="col-md-2"><input type="text" class="form-control" name="contact_phone" placeholder="Phone"></div>
-                    <div class="col-md-3"><input type="text" class="form-control" name="contact_position" placeholder="Position"></div>
-                    <div class="col-md-1 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-contact" tabindex="-1">&times;</button></div>
-                </div>
+            <div id="contacts-section">
+                {% if edit_mode %}
+                    {% for contact in vendor.contacts %}
+                    <div class="row g-2 mb-2 contact-row">
+                        <div class="col-md-3"><input type="text" class="form-control" name="contact_name" placeholder="Name" value="{{ contact.name }}"></div>
+                        <div class="col-md-3"><input type="email" class="form-control" name="contact_email" placeholder="Email" value="{{ contact.email }}"></div>
+                        <div class="col-md-2"><input type="text" class="form-control" name="contact_phone" placeholder="Phone" value="{{ contact.phone }}"></div>
+                        <div class="col-md-3"><input type="text" class="form-control" name="contact_position" placeholder="Position" value="{{ contact.position }}"></div>
+                        <div class="col-md-1 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-contact">&times;</button></div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="row g-2 mb-2 contact-row">
+                        <div class="col-md-3"><input type="text" class="form-control" name="contact_name" placeholder="Name"></div>
+                        <div class="col-md-3"><input type="email" class="form-control" name="contact_email" placeholder="Email"></div>
+                        <div class="col-md-2"><input type="text" class="form-control" name="contact_phone" placeholder="Phone"></div>
+                        <div class="col-md-3"><input type="text" class="form-control" name="contact_position" placeholder="Position"></div>
+                        <div class="col-md-1 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-contact">&times;</button></div>
+                    </div>
+                {% endif %}
             </div>
-            <button type="button" class="btn btn-outline-primary btn-sm" id="add-contact">Add Contact</button>
+            <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="add-contact">Add Contact</button>
         </div>
+        <!-- Equipment -->
         <div class="mb-3">
-            <label for="files" class="form-label">Files</label>
-            <input type="file" class="form-control" id="files" name="files" multiple>
-        </div>
-        <div class="mb-3">
-            <label for="equipment" class="form-label">Equipment</label>
-            <select class="form-select" id="equipment" name="equipment" multiple>
+            <label class="form-label">Associated Equipment</label>
+            <input type="text" class="form-control mb-2" id="equipment-search" placeholder="Search equipment...">
+            <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;" id="equipment-list">
                 {% for eq in equipment_list %}
-                    <option value="{{ eq.id }}">{{ eq.name }}</option>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="equipment" value="{{ eq.id }}" id="equipment_{{ eq.id }}" {% if edit_mode and eq in vendor.equipment %}checked{% endif %}>
+                    <label class="form-check-label" for="equipment_{{ eq.id }}">{{ eq.name }}</label>
+                </div>
                 {% endfor %}
-            </select>
-            <small class="form-text text-muted">Hold Ctrl (Windows) or Cmd (Mac) to select multiple.</small>
+            </div>
+            <div class="form-text">Select equipment by checking the boxes</div>
         </div>
+        <!-- Inventory -->
         <div class="mb-3">
-            <label for="inventory" class="form-label">Inventory Items</label>
-            <select class="form-select" id="inventory" name="inventory" multiple>
+            <label class="form-label">Associated Inventory</label>
+            <input type="text" class="form-control mb-2" id="inventory-search" placeholder="Search inventory...">
+            <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;" id="inventory-list">
                 {% for inv in inventory_list %}
-                    <option value="{{ inv.id }}">{{ inv.name }}</option>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="inventory" value="{{ inv.id }}" id="inventory_{{ inv.id }}" {% if edit_mode and inv in vendor.inventory %}checked{% endif %}>
+                    <label class="form-check-label" for="inventory_{{ inv.id }}">{{ inv.name }}</label>
+                </div>
                 {% endfor %}
-            </select>
-            <small class="form-text text-muted">Hold Ctrl (Windows) or Cmd (Mac) to select multiple.</small>
+            </div>
+            <div class="form-text">Select inventory items by checking the boxes</div>
         </div>
-        <button type="submit" class="btn btn-success">Add Vendor</button>
-        <a href="{{ url_for('vendors') }}" class="btn btn-secondary ms-2">Cancel</a>
+        <!-- Files -->
+        <div class="mb-3">
+            <label class="form-label">Upload Files</label>
+            <input type="file" class="form-control" name="files" multiple>
+            {% if edit_mode and vendor.files %}
+            <div class="mt-2">
+                <strong>Existing Files:</strong>
+                <ul>
+                    {% for f in vendor.files %}
+                    <li>{{ f.filename }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        <div class="d-flex justify-content-between">
+            <a href="{{ url_for('vendors') }}" class="btn btn-secondary">Cancel</a>
+            <div>
+                {% if edit_mode %}
+                <form method="POST" action="{{ url_for('delete_vendor', vendor_id=vendor.id) }}" style="display:inline;">
+                    <button type="submit" class="btn btn-danger me-2" onclick="return confirm('Are you sure you want to delete this vendor?')">Delete</button>
+                </form>
+                {% endif %}
+                <button type="submit" class="btn btn-primary">{% if edit_mode %}Update Vendor{% else %}Add Vendor{% endif %}</button>
+            </div>
+        </div>
     </form>
 </div>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        document.getElementById('add-contact').onclick = function() {
-            const row = document.createElement('div');
-            row.className = 'row g-2 mb-2 contact-row';
-            row.innerHTML = `
-                <div class="col-md-3"><input type="text" class="form-control" name="contact_name" placeholder="Name"></div>
-                <div class="col-md-3"><input type="email" class="form-control" name="contact_email" placeholder="Email"></div>
-                <div class="col-md-2"><input type="text" class="form-control" name="contact_phone" placeholder="Phone"></div>
-                <div class="col-md-3"><input type="text" class="form-control" name="contact_position" placeholder="Position"></div>
-                <div class="col-md-1 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-contact" tabindex="-1">&times;</button></div>
-            `;
-            document.getElementById('contacts-list').appendChild(row);
-        };
-        document.getElementById('contacts-list').addEventListener('click', function(e) {
-            if (e.target.classList.contains('remove-contact')) {
-                const row = e.target.closest('.contact-row');
-                if (row) row.remove();
-            }
-        });
+document.getElementById('add-contact').addEventListener('click', function() {
+    var section = document.getElementById('contacts-section');
+    var row = document.createElement('div');
+    row.className = 'row g-2 mb-2 contact-row';
+    row.innerHTML = `
+        <div class="col-md-3"><input type="text" class="form-control" name="contact_name" placeholder="Name"></div>
+        <div class="col-md-3"><input type="email" class="form-control" name="contact_email" placeholder="Email"></div>
+        <div class="col-md-2"><input type="text" class="form-control" name="contact_phone" placeholder="Phone"></div>
+        <div class="col-md-3"><input type="text" class="form-control" name="contact_position" placeholder="Position"></div>
+        <div class="col-md-1 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-contact">&times;</button></div>
+    `;
+    section.appendChild(row);
+});
+document.addEventListener('click', function(e) {
+    if (e.target && e.target.classList.contains('remove-contact')) {
+        e.target.closest('.contact-row').remove();
+    }
+});
+// Equipment search
+const equipmentSearch = document.getElementById('equipment-search');
+equipmentSearch.addEventListener('input', function() {
+    const filter = this.value.toLowerCase();
+    document.querySelectorAll('#equipment-list .form-check').forEach(function(item) {
+        const label = item.querySelector('label').textContent.toLowerCase();
+        item.style.display = label.includes(filter) ? '' : 'none';
     });
+});
+// Inventory search
+const inventorySearch = document.getElementById('inventory-search');
+inventorySearch.addEventListener('input', function() {
+    const filter = this.value.toLowerCase();
+    document.querySelectorAll('#inventory-list .form-check').forEach(function(item) {
+        const label = item.querySelector('label').textContent.toLowerCase();
+        item.style.display = label.includes(filter) ? '' : 'none';
+    });
+});
 </script>
 {% endblock %} 
