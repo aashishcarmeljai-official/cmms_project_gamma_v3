@@ -506,6 +506,14 @@ def equipment_new():
         abort(403)
     if request.method == 'POST':
         data = request.form
+        # Handle location - if location_id is provided, use it; otherwise use location string
+        location_id = data.get('location_id')
+        location_string = data.get('location')
+        
+        # Handle department - if department_id is provided, use it; otherwise use department string
+        department_id = data.get('department_id')
+        department_string = data.get('department')
+        
         equipment = Equipment(
             name=data['name'],
             equipment_id=data['equipment_id'],
@@ -513,8 +521,10 @@ def equipment_new():
             manufacturer=data.get('manufacturer'),
             model=data.get('model'),
             serial_number=data.get('serial_number'),
-            location=data.get('location'),
-            department=data.get('department'),
+            location=location_string,  # Keep for backward compatibility
+            location_id=location_id,  # New location relationship
+            department=department_string,  # Keep for backward compatibility
+            department_id=department_id,  # New department relationship
             criticality=data.get('criticality', 'medium'),
             description=data.get('description'),
             specifications=data.get('specifications'),
@@ -527,7 +537,11 @@ def equipment_new():
     
     # Get categories for the dropdown
     categories = filter_by_company(Category.query).filter_by(is_active=True).order_by(Category.name).all()
-    return render_template('equipment/new.html', categories=categories)
+    # Get locations for the dropdown
+    locations = filter_by_company(Location.query).filter_by(is_active=True).order_by(Location.name).all()
+    # Get departments for the dropdown
+    departments = filter_by_company(Department.query).filter_by(is_active=True).order_by(Department.name).all()
+    return render_template('equipment/new.html', categories=categories, locations=locations, departments=departments)
 
 @app.route('/equipment/<int:id>')
 @login_required
@@ -919,6 +933,7 @@ def inventory_new():
             manufacturer=data.get('manufacturer'),
             supplier=data.get('supplier'),
             unit_cost=data.get('unit_cost'),
+            currency=data.get('currency', 'USD'),
             current_stock=data.get('current_stock', 0),
             minimum_stock=data.get('minimum_stock', 0),
             maximum_stock=data.get('maximum_stock'),

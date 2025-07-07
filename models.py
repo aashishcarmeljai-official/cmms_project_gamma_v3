@@ -168,7 +168,8 @@ class Equipment(db.Model):
     serial_number = db.Column(db.String(100))
     location = db.Column(db.String(200))  # Keep for backward compatibility
     location_id = db.Column(db.Integer, db.ForeignKey('locations.id'))  # New location relationship
-    department = db.Column(db.String(100))
+    department = db.Column(db.String(100))  # Keep for backward compatibility
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'))  # New department relationship
     tags = db.Column(db.Text)  # Comma-separated tags for filtering
     purchase_date = db.Column(db.Date)
     warranty_expiry = db.Column(db.Date)
@@ -446,6 +447,7 @@ class Inventory(db.Model):
     manufacturer = db.Column(db.String(100))
     supplier = db.Column(db.String(100))
     unit_cost = db.Column(db.Numeric(10, 2))
+    currency = db.Column(db.String(3), default='USD')  # ISO 4217 currency code
     current_stock = db.Column(db.Integer, default=0)
     minimum_stock = db.Column(db.Integer, default=0)
     maximum_stock = db.Column(db.Integer)
@@ -471,6 +473,7 @@ class Inventory(db.Model):
             'manufacturer': self.manufacturer,
             'supplier': self.supplier,
             'unit_cost': float(self.unit_cost) if self.unit_cost else None,
+            'currency': self.currency,
             'current_stock': self.current_stock,
             'minimum_stock': self.minimum_stock,
             'maximum_stock': self.maximum_stock,
@@ -845,6 +848,7 @@ class Department(db.Model):
     __table_args__ = (db.UniqueConstraint('company_id', 'name', name='uq_department_company_name'),)
 
     company = db.relationship('Company', backref='departments')
+    equipment = db.relationship('Equipment', backref='department_info', lazy=True)
 
     def __repr__(self):
         return f'<Department {self.name}>'
