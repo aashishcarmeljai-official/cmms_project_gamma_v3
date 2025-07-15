@@ -5441,6 +5441,7 @@ def whatsapp_verify():
                 existing_user.is_verified = False
             else:
                 whatsapp_user = WhatsAppUser(
+                    company_id=current_user.company_id,
                     user_id=current_user.id,
                     whatsapp_number=phone_number,
                     verification_code=code,
