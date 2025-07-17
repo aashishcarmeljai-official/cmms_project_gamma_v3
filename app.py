@@ -512,11 +512,12 @@ def equipment_new():
         data = request.form
         # Handle location - if location_id is provided, use it; otherwise use location string
         location_id = data.get('location_id')
-        location_string = data.get('location')
-        
+        if not location_id:
+            location_id = None
         # Handle department - if department_id is provided, use it; otherwise use department string
         department_id = data.get('department_id')
-        department_string = data.get('department')
+        if not department_id:
+            department_id = None
         
         # Handle date fields
         purchase_date = None
@@ -544,14 +545,15 @@ def equipment_new():
             serial_number=data.get('serial_number'),
             purchase_date=purchase_date,
             warranty_expiry=warranty_expiry,
-            location=location_string,  # Keep for backward compatibility
+            location=data.get('location'),  # Keep for backward compatibility
             location_id=location_id,  # New location relationship
-            department=department_string,  # Keep for backward compatibility
+            department=data.get('department'),  # Keep for backward compatibility
             department_id=department_id,  # New department relationship
             criticality=data.get('criticality', 'medium'),
             description=data.get('description'),
             specifications=data.get('specifications'),
-            company_id=current_user.company_id
+            company_id=current_user.company_id,
+            created_by_id=current_user.id  # <-- Added this line
         )
         db.session.add(equipment)
         db.session.commit()
@@ -580,7 +582,7 @@ def equipment_detail(id):
         abort(404)
     work_orders = filter_by_company(WorkOrder.query).filter_by(equipment_id=id).order_by(WorkOrder.created_at.desc()).all()
     maintenance_schedules = filter_by_company(MaintenanceSchedule.query).filter_by(equipment_id=id).all()
-    today = datetime.now()
+    today = datetime.now().date()
     return render_template('equipment/detail.html', 
                          equipment=equipment, 
                          work_orders=work_orders,
@@ -5246,8 +5248,20 @@ def qr_failure_report(equipment_id):
                         if file_path:
                             audio_files.append(file_path)
             
+            # Find the technician with the lowest number of assigned work orders in the same company
+            from models import User, WorkOrder
+            technicians = User.query.filter_by(company_id=equipment.company_id, role='technician', is_active=True).all()
+            technician_id = None
+            if technicians:
+                # Get (technician, count) tuples
+                tech_counts = [(tech, WorkOrder.query.filter_by(assigned_technician_id=tech.id).count()) for tech in technicians]
+                # Sort by count, then by id for stability
+                tech_counts.sort(key=lambda x: (x[1], x[0].id))
+                technician_id = tech_counts[0][0].id
+
             # Create work order
             work_order = WorkOrder(
+                company_id=equipment.company_id,
                 work_order_number=generate_work_order_number(),
                 title=f"QR Report: {failure_type.title()} Failure - {equipment.name}",
                 description=f"Failure reported via QR code:\n\n{description}\n\nReporter: {reporter_name or 'Anonymous'}\nPhone: {reporter_phone or 'Not provided'}",
@@ -5255,6 +5269,7 @@ def qr_failure_report(equipment_id):
                 status='open',
                 type='corrective',
                 equipment_id=equipment.id,
+                assigned_technician_id=technician_id,  # <-- Assign to least busy technician
                 created_by_id=1,  # Default admin user, you might want to handle this differently
                 scheduled_date=datetime.now(),
                 due_date=datetime.now() + timedelta(hours=4) if urgency == 'high' else datetime.now() + timedelta(days=1),

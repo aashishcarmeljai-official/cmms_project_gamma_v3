@@ -117,7 +117,7 @@
                             <p class="mb-2"><strong>ID:</strong> {{ equipment.equipment_id }}</p>
                         </div>
                         <div class="col-md-6">
-                            <p class="mb-2"><strong>Location:</strong> {{ equipment.location or 'Not specified' }}</p>
+                            <p class="mb-2"><strong>Location:</strong> {{ equipment.location_info.name if equipment.location_info else (equipment.location or 'Not specified') }}</p>
                             <p class="mb-2"><strong>Category:</strong> {{ equipment.category }}</p>
                         </div>
                     </div>
@@ -129,8 +129,11 @@
                         <i class="fas fa-mobile-alt me-2"></i>QR Code for Mobile Scanning
                     </h5>
                     <div id="qrCode">
+                        <div style="text-align:center; font-weight:bold; font-size:1.2em; margin-bottom:10px;">Submit Work Request</div>
                         <img src="{{ qr_img }}" alt="QR Code" style="max-width: 300px; width: 100%; height: auto; display: block; margin: 0 auto; background: white; padding: 10px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+                        <div style="text-align:center; font-weight:bold; font-size:1.1em; margin-top:10px;">{{ equipment.name }}</div>
                     </div>
+                    <canvas id="qrCanvas" width="400" height="600" style="display:none;"></canvas>
                     <p class="text-muted mt-3">
                         <strong>URL:</strong> <code>{{ qr_url }}</code>
                     </p>
@@ -142,10 +145,10 @@
                         <i class="fas fa-download me-2"></i>Download Options
                     </h5>
                     <div class="d-flex flex-wrap justify-content-center">
-                        <a class="btn btn-download" href="{{ qr_img }}" download="QR_{{ equipment.equipment_id }}_{{ equipment.name|replace(' ', '_') }}.png">
-                            <i class="fas fa-image me-2"></i>Download PNG
-                        </a>
-                        <button class="btn btn-download" onclick="copyURL()">
+                        <button class="btn btn-download me-2" onclick="downloadCompositeQR()">
+                            <i class="fas fa-download me-2"></i>Download PNG
+                        </button>
+                        <button class="btn btn-download" onclick="copyURL(event)">
                             <i class="fas fa-copy me-2"></i>Copy URL
                         </button>
                     </div>
@@ -182,7 +185,7 @@
 {% block scripts %}
     {{ super() }}
     <script>
-        function copyURL() {
+        function copyURL(event) {
             const qrUrl = '{{ qr_url }}';
             navigator.clipboard.writeText(qrUrl).then(function() {
                 const button = event.target;
@@ -196,6 +199,65 @@
             }).catch(function(err) {
                 alert('Failed to copy URL: ' + err);
             });
+        }
+
+        function downloadCompositeQR() {
+            const qrImg = document.querySelector('#qrCode img');
+            const equipmentName = {{ equipment.name|tojson }};
+            // Increase canvas height for more space below QR
+            const canvas = document.getElementById('qrCanvas');
+            canvas.width = 400;
+            canvas.height = 600;
+            const ctx = canvas.getContext('2d');
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw QR code image (centered)
+            const img = new window.Image();
+            img.crossOrigin = "Anonymous";
+            img.onload = function() {
+                // Center the QR code
+                const qrWidth = img.width;
+                const qrHeight = img.height;
+                const qrX = (canvas.width - qrWidth) / 2;
+                const qrY = 120;
+
+                // Draw white background just for the composite area (heading + QR + equipment name)
+                const bgHeight = 80 + qrHeight + 60 + 60; // heading + QR + gap + equipment name
+                const bgY = 60; // start a bit above heading
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(qrX - 20, bgY, qrWidth + 40, bgHeight);
+
+                // Draw heading (black, bold)
+                ctx.font = "bold 32px Arial";
+                ctx.textAlign = "center";
+                ctx.fillStyle = "#000";
+                ctx.fillText("Submit Work Request", canvas.width / 2, 100);
+
+                // Draw QR code
+                ctx.drawImage(img, qrX, qrY);
+
+                // Draw equipment name below QR (black, bold, with white background)
+                const eqFont = "bold 22px Arial";
+                ctx.font = eqFont;
+                ctx.textAlign = "center";
+                ctx.fillStyle = "#000";
+                const eqY = qrY + qrHeight + 50;
+                // Measure text width for background
+                const eqTextWidth = ctx.measureText(equipmentName).width;
+                ctx.fillStyle = '#fff';
+                ctx.fillRect((canvas.width - eqTextWidth) / 2 - 10, eqY - 28, eqTextWidth + 20, 36);
+                ctx.fillStyle = '#000';
+                ctx.fillText(equipmentName, canvas.width / 2, eqY);
+
+                // Download as PNG
+                const link = document.createElement('a');
+                link.download = `QR_${equipmentName.replace(/\s+/g, '_')}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            };
+            img.src = qrImg.src;
         }
     </script>
 {% endblock %} 
