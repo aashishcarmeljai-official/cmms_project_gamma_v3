@@ -163,6 +163,23 @@
                             </div>
                         </div>
                         
+                        <!-- Media Uploads -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h6 class="mb-3">Media Uploads</h6>
+                                <div class="mb-3">
+                                    <label class="form-label">Videos</label>
+                                    <input type="file" id="videoInput" name="videos" multiple accept="video/*">
+                                    <div id="videoPreview" class="media-preview"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Audio Files</label>
+                                    <input type="file" id="audioInput" name="audio_files" multiple accept="audio/*">
+                                    <div id="audioPreview" class="media-preview"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Form Actions -->
                         <div class="row">
                             <div class="col-12">
@@ -262,6 +279,86 @@ function addCategory() {
         console.error('Error:', error);
         alert('Error adding category');
     });
+}
+
+let videoFiles = [];
+let audioFiles = [];
+
+document.getElementById('videoInput').addEventListener('change', handleVideoUpload);
+document.getElementById('audioInput').addEventListener('change', handleAudioUpload);
+
+function handleVideoUpload(event) {
+    const files = Array.from(event.target.files);
+    files.forEach(file => {
+        if (file.type.startsWith('video/')) {
+            if (!videoFiles.some(f => f.name === file.name)) {
+                videoFiles.push(file);
+                displayMedia(file, 'video');
+            }
+        }
+    });
+    updateInputFiles('videoInput', videoFiles);
+}
+
+function handleAudioUpload(event) {
+    const files = Array.from(event.target.files);
+    files.forEach(file => {
+        if (file.type.startsWith('audio/')) {
+            if (!audioFiles.some(f => f.name === file.name)) {
+                audioFiles.push(file);
+                displayMedia(file, 'audio');
+            }
+        }
+    });
+    updateInputFiles('audioInput', audioFiles);
+}
+
+function updateInputFiles(inputId, filesArr) {
+    const input = document.getElementById(inputId);
+    const dt = new DataTransfer();
+    filesArr.forEach(f => dt.items.add(f));
+    input.files = dt.files;
+    // Debug log
+    console.log('Updated', inputId, 'with', filesArr.length, 'files:', filesArr.map(f => f.name));
+}
+
+function removeMediaItem(mediaItem, type, fileName) {
+    mediaItem.remove();
+    if (type === 'video') {
+        videoFiles = videoFiles.filter(f => f.name !== fileName);
+        updateInputFiles('videoInput', videoFiles);
+    } else if (type === 'audio') {
+        audioFiles = audioFiles.filter(f => f.name !== fileName);
+        updateInputFiles('audioInput', audioFiles);
+    }
+}
+
+function displayMedia(file, type) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const mediaItem = document.createElement('div');
+        mediaItem.className = 'media-item';
+        mediaItem.dataset.file = file.name;
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-media';
+        removeBtn.innerHTML = '×';
+        removeBtn.onclick = () => removeMediaItem(mediaItem, type, file.name);
+        if (type === 'video') {
+            const video = document.createElement('video');
+            video.src = e.target.result;
+            video.controls = true;
+            mediaItem.appendChild(video);
+            document.getElementById('videoPreview').appendChild(mediaItem);
+        } else if (type === 'audio') {
+            const audio = document.createElement('audio');
+            audio.src = e.target.result;
+            audio.controls = true;
+            mediaItem.appendChild(audio);
+            document.getElementById('audioPreview').appendChild(mediaItem);
+        }
+        mediaItem.appendChild(removeBtn);
+    };
+    reader.readAsDataURL(file);
 }
 </script>
 {% endblock %} 

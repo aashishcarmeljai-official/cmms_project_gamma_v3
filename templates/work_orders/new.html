@@ -235,6 +235,9 @@
                                 <button type="button" class="upload-btn" onclick="document.getElementById('images').click()">
                                     <i class="fas fa-camera"></i>Add Photos
                                 </button>
+                                <button type="button" class="upload-btn" onclick="openCameraModal('photo')">
+                                    <i class="fas fa-camera-retro"></i>Take Photo
+                                </button>
                                 <input type="file" id="images" name="images" multiple accept="image/*" style="display: none;" onchange="handleImageUpload(this)">
                                 <div class="media-preview" id="imagePreview"></div>
                             </div>
@@ -244,6 +247,9 @@
                                 <label class="form-label">Videos</label>
                                 <button type="button" class="upload-btn" onclick="document.getElementById('videos').click()">
                                     <i class="fas fa-video"></i>Add Videos
+                                </button>
+                                <button type="button" class="upload-btn" onclick="openCameraModal('video')">
+                                    <i class="fas fa-video"></i>Record Video
                                 </button>
                                 <input type="file" id="videos" name="videos" multiple accept="video/*" style="display: none;" onchange="handleVideoUpload(this)">
                                 <div class="media-preview" id="videoPreview"></div>
@@ -326,11 +332,26 @@
     </div>
 </div>
 
+<!-- Camera Modal for Live Capture -->
+<div id="cameraModal" class="modal" tabindex="-1" style="display:none; background:rgba(0,0,0,0.7); position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:2000; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:10px; padding:20px; max-width:400px; margin:auto; position:relative;">
+    <button type="button" onclick="closeCameraModal()" style="position:absolute; top:10px; right:10px; background:none; border:none; font-size:2rem;">&times;</button>
+    <video id="liveVideo" autoplay playsinline style="width:100%; border-radius:8px;"></video>
+    <canvas id="captureCanvas" style="display:none;"></canvas>
+    <div id="cameraControls" style="margin-top:10px; text-align:center;"></div>
+  </div>
+</div>
+
 <script>
 let mediaRecorder;
 let audioChunks = [];
 let recordingInterval;
 let recordingSeconds = 0;
+
+let cameraStream = null;
+let mediaRecorderLive = null;
+let recordedChunks = [];
+let captureType = null;
 
 // Image upload handling
 function handleImageUpload(input) {
@@ -471,6 +492,95 @@ async function toggleRecording() {
         // Stop all tracks
         mediaRecorder.stream.getTracks().forEach(track => track.stop());
     }
+}
+
+function openCameraModal(type) {
+    console.log('openCameraModal called with type:', type);
+    captureType = type;
+    document.getElementById('cameraModal').style.display = 'flex';
+    const video = document.getElementById('liveVideo');
+    const controls = document.getElementById('cameraControls');
+    const canvas = document.getElementById('captureCanvas');
+    canvas.style.display = 'none';
+    controls.innerHTML = '';
+    navigator.mediaDevices.getUserMedia({ video: true, audio: type === 'video' })
+        .then(stream => {
+            cameraStream = stream;
+            video.srcObject = stream;
+            video.style.display = 'block';
+            if (type === 'photo') {
+                controls.innerHTML = '<button type="button" class="upload-btn" onclick="capturePhoto()"><i class="fas fa-camera"></i>Capture Photo</button>';
+            } else if (type === 'video') {
+                controls.innerHTML = '<button type="button" class="upload-btn" id="startRecBtn" onclick="startVideoRecording()"><i class="fas fa-circle"></i>Start Recording</button>';
+            }
+        })
+        .catch(err => {
+            alert('Could not access camera: ' + err);
+            closeCameraModal();
+        });
+}
+
+function closeCameraModal() {
+    document.getElementById('cameraModal').style.display = 'none';
+    const video = document.getElementById('liveVideo');
+    video.pause();
+    video.srcObject = null;
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+    }
+    mediaRecorderLive = null;
+    recordedChunks = [];
+    captureType = null;
+}
+
+function capturePhoto() {
+    const video = document.getElementById('liveVideo');
+    const canvas = document.getElementById('captureCanvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(blob => {
+        const file = new File([blob], `photo_${Date.now()}.png`, { type: 'image/png' });
+        addFileToInput('images', file);
+        handleImageUpload({ files: [file] });
+        closeCameraModal();
+    }, 'image/png');
+}
+
+function startVideoRecording() {
+    const controls = document.getElementById('cameraControls');
+    controls.innerHTML = '<button type="button" class="upload-btn" id="stopRecBtn" onclick="stopVideoRecording()"><i class="fas fa-stop"></i>Stop Recording</button>';
+    recordedChunks = [];
+    mediaRecorderLive = new MediaRecorder(cameraStream, { mimeType: 'video/webm' });
+    mediaRecorderLive.ondataavailable = function(e) {
+        if (e.data.size > 0) recordedChunks.push(e.data);
+    };
+    mediaRecorderLive.onstop = function() {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const file = new File([blob], `video_${Date.now()}.webm`, { type: 'video/webm' });
+        addFileToInput('videos', file);
+        handleVideoUpload({ files: [file] });
+        closeCameraModal();
+    };
+    mediaRecorderLive.start();
+}
+
+function stopVideoRecording() {
+    if (mediaRecorderLive && mediaRecorderLive.state === 'recording') {
+        mediaRecorderLive.stop();
+    }
+}
+
+function addFileToInput(inputId, file) {
+    const input = document.getElementById(inputId);
+    const dt = new DataTransfer();
+    // Add existing files
+    for (let i = 0; i < input.files.length; i++) {
+        dt.items.add(input.files[i]);
+    }
+    dt.items.add(file);
+    input.files = dt.files;
 }
 
 // Form submission with progress tracking

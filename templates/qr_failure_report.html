@@ -229,7 +229,7 @@
                         <div class="mb-3">
                             <label class="form-label">Photos</label>
                             <div class="d-flex flex-wrap gap-2">
-                                <button type="button" class="capture-btn" onclick="captureImage()">
+                                <button type="button" class="capture-btn" onclick="openCameraModal('photo')">
                                     <i class="fas fa-camera me-1"></i>Take Photo
                                 </button>
                                 <input type="file" id="imageInput" name="images" multiple accept="image/*" style="display: none;">
@@ -244,7 +244,7 @@
                         <div class="mb-3">
                             <label class="form-label">Videos</label>
                             <div class="d-flex flex-wrap gap-2">
-                                <button type="button" class="capture-btn" onclick="captureVideo()">
+                                <button type="button" class="capture-btn" onclick="openCameraModal('video')">
                                     <i class="fas fa-video me-1"></i>Record Video
                                 </button>
                                 <input type="file" id="videoInput" name="videos" multiple accept="video/*" style="display: none;">
@@ -259,7 +259,7 @@
                         <div class="mb-3">
                             <label class="form-label">Audio Messages</label>
                             <div class="d-flex flex-wrap gap-2">
-                                <button type="button" class="capture-btn" id="recordAudioBtn" onclick="toggleAudioRecording()">
+                                <button type="button" class="capture-btn" onclick="openAudioModal()">
                                     <i class="fas fa-microphone me-1"></i>Record Audio
                                 </button>
                                 <input type="file" id="audioInput" name="audio_files" multiple accept="audio/*" style="display: none;">
@@ -305,6 +305,26 @@
     <video id="videoElement" style="display: none;" autoplay muted></video>
     <audio id="audioElement" style="display: none;"></audio>
 
+    <!-- Camera Modal for Live Capture -->
+    <div id="cameraModal" class="modal" tabindex="-1" style="display:none; background:rgba(0,0,0,0.7); position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:2000; align-items:center; justify-content:center;">
+      <div style="background:#fff; border-radius:10px; padding:20px; max-width:400px; margin:auto; position:relative;">
+        <button type="button" onclick="closeCameraModal()" style="position:absolute; top:10px; right:10px; background:none; border:none; font-size:2rem;">&times;</button>
+        <video id="liveVideo" autoplay playsinline style="width:100%; border-radius:8px;"></video>
+        <canvas id="captureCanvas" style="display:none;"></canvas>
+        <div id="cameraControls" style="margin-top:10px; text-align:center;"></div>
+      </div>
+    </div>
+
+    <!-- Audio Modal for Live Recording -->
+    <div id="audioModal" class="modal" tabindex="-1" style="display:none; background:rgba(0,0,0,0.7); position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:2000; align-items:center; justify-content:center;">
+      <div style="background:#fff; border-radius:10px; padding:20px; max-width:400px; margin:auto; position:relative; text-align:center;">
+        <button type="button" onclick="closeAudioModal()" style="position:absolute; top:10px; right:10px; background:none; border:none; font-size:2rem;">&times;</button>
+        <h5>Record Audio</h5>
+        <div id="audioControls" style="margin-top:20px;"></div>
+        <div id="audioRecordingStatus" style="margin-top:10px; color:#dc3545; font-weight:bold;"></div>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let mediaRecorder;
@@ -312,50 +332,105 @@
         let isRecording = false;
         let stream = null;
 
+        let cameraStream = null;
+        let mediaRecorderLive = null;
+        let recordedChunksLive = [];
+        let captureType = null;
+
+        let audioRecorder = null;
+        let audioChunks = [];
+        let isAudioRecording = false;
+
+        // Persistent arrays for each media type
+        let imageFiles = [];
+        let videoFiles = [];
+        let audioFiles = [];
+
         // File input handlers
+        // Update to use persistent arrays
         document.getElementById('imageInput').addEventListener('change', handleImageUpload);
         document.getElementById('videoInput').addEventListener('change', handleVideoUpload);
         document.getElementById('audioInput').addEventListener('change', handleAudioUpload);
 
         function handleImageUpload(event) {
-            const files = event.target.files;
-            for (let file of files) {
+            const files = Array.from(event.target.files);
+            files.forEach(file => {
                 if (file.type.startsWith('image/')) {
+                    imageFiles.push(file);
                     displayMedia(file, 'image');
                 }
-            }
+            });
+            updateInputFiles('imageInput', imageFiles);
         }
 
         function handleVideoUpload(event) {
-            const files = event.target.files;
-            for (let file of files) {
+            const files = Array.from(event.target.files);
+            files.forEach(file => {
                 if (file.type.startsWith('video/')) {
+                    videoFiles.push(file);
                     displayMedia(file, 'video');
                 }
-            }
+            });
+            updateInputFiles('videoInput', videoFiles);
         }
 
         function handleAudioUpload(event) {
-            const files = event.target.files;
-            for (let file of files) {
+            const files = Array.from(event.target.files);
+            files.forEach(file => {
                 if (file.type.startsWith('audio/')) {
-                    displayMedia(file, 'audio');
+                    // Avoid duplicates by file name
+                    if (!audioFiles.some(f => f.name === file.name)) {
+                        audioFiles.push(file);
+                        displayMedia(file, 'audio');
+                    }
                 }
+            });
+            updateInputFiles('audioInput', audioFiles);
+        }
+
+        function updateInputFiles(inputId, filesArr) {
+            const input = document.getElementById(inputId);
+            const dt = new DataTransfer();
+            filesArr.forEach(f => dt.items.add(f));
+            input.files = dt.files;
+            // Debug log
+            console.log('Updated', inputId, 'with', filesArr.length, 'files:', filesArr.map(f => f.name));
+        }
+
+        // Add file to persistent array and update input
+        function addFileToInput(inputId, file) {
+            if (inputId === 'imageInput') imageFiles.push(file);
+            if (inputId === 'videoInput') videoFiles.push(file);
+            if (inputId === 'audioInput') audioFiles.push(file);
+            updateInputFiles(inputId, inputId === 'imageInput' ? imageFiles : inputId === 'videoInput' ? videoFiles : audioFiles);
+        }
+
+        // Remove media item and update array/input
+        function removeMediaItem(mediaItem, type, fileName) {
+            mediaItem.remove();
+            if (type === 'image') {
+                imageFiles = imageFiles.filter(f => f.name !== fileName);
+                updateInputFiles('imageInput', imageFiles);
+            } else if (type === 'video') {
+                videoFiles = videoFiles.filter(f => f.name !== fileName);
+                updateInputFiles('videoInput', videoFiles);
+            } else if (type === 'audio') {
+                audioFiles = audioFiles.filter(f => f.name !== fileName);
+                updateInputFiles('audioInput', audioFiles);
             }
         }
 
+        // Display media and add remove button
         function displayMedia(file, type) {
             const reader = new FileReader();
             reader.onload = function(e) {
                 const mediaItem = document.createElement('div');
                 mediaItem.className = 'media-item';
                 mediaItem.dataset.file = file.name;
-
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'remove-media';
                 removeBtn.innerHTML = '×';
-                removeBtn.onclick = () => mediaItem.remove();
-
+                removeBtn.onclick = () => removeMediaItem(mediaItem, type, file.name);
                 if (type === 'image') {
                     const img = document.createElement('img');
                     img.src = e.target.result;
@@ -374,7 +449,6 @@
                     mediaItem.appendChild(audio);
                     document.getElementById('audioPreview').appendChild(mediaItem);
                 }
-
                 mediaItem.appendChild(removeBtn);
             };
             reader.readAsDataURL(file);
@@ -480,6 +554,142 @@
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
+            }
+        }
+
+        function openCameraModal(type) {
+            captureType = type;
+            document.getElementById('cameraModal').style.display = 'flex';
+            const video = document.getElementById('liveVideo');
+            const controls = document.getElementById('cameraControls');
+            const canvas = document.getElementById('captureCanvas');
+            canvas.style.display = 'none';
+            controls.innerHTML = '';
+            navigator.mediaDevices.getUserMedia({ video: true, audio: type === 'video' })
+                .then(stream => {
+                    cameraStream = stream;
+                    video.srcObject = stream;
+                    video.style.display = 'block';
+                    if (type === 'photo') {
+                        controls.innerHTML = '<button type="button" class="capture-btn" onclick="capturePhoto()"><i class="fas fa-camera"></i>Capture Photo</button>';
+                    } else if (type === 'video') {
+                        controls.innerHTML = '<button type="button" class="capture-btn" id="startRecBtn" onclick="startVideoRecording()"><i class="fas fa-circle"></i>Start Recording</button>';
+                    }
+                })
+                .catch(err => {
+                    alert('Could not access camera: ' + err);
+                    closeCameraModal();
+                });
+        }
+
+        function closeCameraModal() {
+            document.getElementById('cameraModal').style.display = 'none';
+            const video = document.getElementById('liveVideo');
+            video.pause();
+            video.srcObject = null;
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            mediaRecorderLive = null;
+            recordedChunksLive = [];
+            captureType = null;
+        }
+
+        function capturePhoto() {
+            const video = document.getElementById('liveVideo');
+            const canvas = document.getElementById('captureCanvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(blob => {
+                const file = new File([blob], `photo_${Date.now()}.png`, { type: 'image/png' });
+                addFileToInput('imageInput', file);
+                displayMedia(file, 'image');
+                closeCameraModal();
+            }, 'image/png');
+        }
+
+        function startVideoRecording() {
+            const controls = document.getElementById('cameraControls');
+            controls.innerHTML = '<button type="button" class="capture-btn" id="stopRecBtn" onclick="stopVideoRecording()"><i class="fas fa-stop"></i>Stop Recording</button>';
+            recordedChunksLive = [];
+            mediaRecorderLive = new MediaRecorder(cameraStream, { mimeType: 'video/webm' });
+            mediaRecorderLive.ondataavailable = function(e) {
+                if (e.data.size > 0) recordedChunksLive.push(e.data);
+            };
+            mediaRecorderLive.onstop = function() {
+                const blob = new Blob(recordedChunksLive, { type: 'video/webm' });
+                const file = new File([blob], `video_${Date.now()}.webm`, { type: 'video/webm' });
+                addFileToInput('videoInput', file);
+                displayMedia(file, 'video');
+                closeCameraModal();
+            };
+            mediaRecorderLive.start();
+        }
+
+        function stopVideoRecording() {
+            if (mediaRecorderLive && mediaRecorderLive.state === 'recording') {
+                mediaRecorderLive.stop();
+            }
+        }
+
+        function addFileToInput(inputId, file) {
+            if (inputId === 'imageInput') imageFiles.push(file);
+            if (inputId === 'videoInput') videoFiles.push(file);
+            if (inputId === 'audioInput') audioFiles.push(file);
+            updateInputFiles(inputId, inputId === 'imageInput' ? imageFiles : inputId === 'videoInput' ? videoFiles : audioFiles);
+        }
+
+        function openAudioModal() {
+            document.getElementById('audioModal').style.display = 'flex';
+            const controls = document.getElementById('audioControls');
+            const status = document.getElementById('audioRecordingStatus');
+            controls.innerHTML = '<button type="button" class="capture-btn" id="startAudioRecBtn" onclick="startAudioRecording()"><i class="fas fa-microphone"></i>Start Recording</button>';
+            status.textContent = '';
+        }
+
+        function closeAudioModal() {
+            document.getElementById('audioModal').style.display = 'none';
+            if (audioRecorder && audioRecorder.state !== 'inactive') {
+                audioRecorder.stop();
+            }
+            audioRecorder = null;
+            audioChunks = [];
+            isAudioRecording = false;
+        }
+
+        function startAudioRecording() {
+            const controls = document.getElementById('audioControls');
+            const status = document.getElementById('audioRecordingStatus');
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    audioRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    audioRecorder.ondataavailable = e => {
+                        if (e.data.size > 0) audioChunks.push(e.data);
+                    };
+                    audioRecorder.onstop = () => {
+                        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const file = new File([blob], `audio_${Date.now()}.webm`, { type: 'audio/webm' });
+                        addFileToInput('audioInput', file);
+                        displayMedia(file, 'audio');
+                        closeAudioModal();
+                    };
+                    audioRecorder.start();
+                    isAudioRecording = true;
+                    controls.innerHTML = '<button type="button" class="capture-btn" id="stopAudioRecBtn" onclick="stopAudioRecording()"><i class="fas fa-stop"></i>Stop Recording</button>';
+                    status.textContent = 'Recording...';
+                })
+                .catch(err => {
+                    alert('Could not access microphone: ' + err);
+                    closeAudioModal();
+                });
+        }
+
+        function stopAudioRecording() {
+            if (audioRecorder && audioRecorder.state === 'recording') {
+                audioRecorder.stop();
             }
         }
 
