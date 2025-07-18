@@ -59,7 +59,7 @@
                                 </div>
                                 <div class="mb-3">
                                     {{ form.state.label(class="form-label") }}
-                                    {{ form.state(class="form-control" + (" is-invalid" if form.state.errors else "")) }}
+                                    {{ form.state(class="form-select" + (" is-invalid" if form.state.errors else "")) }}
                                     {% if form.state.errors %}
                                         <div class="invalid-feedback">
                                             {% for error in form.state.errors %}{{ error }}{% endfor %}
@@ -189,4 +189,46 @@
         </div>
     </div>
 </div>
+{% endblock %} 
+{% block scripts %}
+{{ super() }}
+<script>
+// Map country names to alpha_2 codes using pycountry data (for client-side lookup)
+const countryNameToCode = {};
+fetch('https://raw.githubusercontent.com/mledoze/countries/master/countries.json')
+  .then(response => response.json())
+  .then(data => {
+    data.forEach(country => {
+      countryNameToCode[country.name.common] = country.cca2;
+    });
+  });
+
+document.addEventListener('DOMContentLoaded', function() {
+  const countrySelect = document.getElementById('country');
+  const stateSelect = document.getElementById('state');
+
+  if (countrySelect && stateSelect) {
+    countrySelect.addEventListener('change', function() {
+      const countryName = countrySelect.value;
+      const countryCode = countryNameToCode[countryName];
+      // Clear state options
+      stateSelect.innerHTML = '<option value="">Select State/Province</option>';
+      if (countryCode) {
+        fetch(`/api/subdivisions/${countryCode}`)
+          .then(response => response.json())
+          .then(states => {
+            if (states.length > 0) {
+              states.forEach(function(state) {
+                const option = document.createElement('option');
+                option.value = state[0];
+                option.textContent = state[1];
+                stateSelect.appendChild(option);
+              });
+            }
+          });
+      }
+    });
+  }
+});
+</script>
 {% endblock %} 

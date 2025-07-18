@@ -548,8 +548,8 @@
                             {% for voice in work_order.voice_notes.split(',') %}
                             <div class="media-item audio">
                                 <audio controls style="width: 100%; height: 40px;">
-                                    <source src="{{ url_for('static', filename=voice.strip()) }}" type="audio/mpeg">
-                                    Your browser does not support the audio element.
+                                    <source src="{{ url_for('static', filename=voice.strip()) }}">
+                                    Your browser does not support the audio element or this audio format.
                                 </audio>
                             </div>
                             {% endfor %}

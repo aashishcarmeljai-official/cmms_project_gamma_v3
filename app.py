@@ -24,6 +24,8 @@ import click
 from extensions import db
 from sqlalchemy.orm import joinedload
 import openai
+import pycountry
+from typing import Sequence
 
 # Load environment variables
 load_dotenv()
@@ -835,61 +837,66 @@ def work_order_new():
     """Create new work order"""
     if request.method == 'POST':
         data = request.form
-        
-        # Handle image uploads
-        images = []
-        if 'images' in request.files:
-            uploaded_files = request.files.getlist('images')
-            static_folder = app.static_folder or ''
-            for file in uploaded_files:
-                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'image')
-                if file_path:
-                    images.append(file_path)
-        
-        # Handle video uploads
-        videos = []
-        if 'videos' in request.files:
-            uploaded_files = request.files.getlist('videos')
-            static_folder = app.static_folder or ''
-            for file in uploaded_files:
-                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'video')
-                if file_path:
-                    videos.append(file_path)
-        
-        # Handle voice note uploads
-        voice_notes = []
-        if 'voice_notes' in request.files:
-            uploaded_files = request.files.getlist('voice_notes')
-            static_folder = app.static_folder or ''
-            for file in uploaded_files:
-                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'audio')
-                if file_path:
-                    voice_notes.append(file_path)
-        
-        work_order = WorkOrder(
-            company_id=current_user.company_id,
-            work_order_number=generate_work_order_number(),
-            title=data['title'],
-            description=data['description'],
-            priority=data.get('priority', 'medium'),
-            type=data.get('type', 'corrective'),
-            equipment_id=data['equipment_id'],
-            location_id=data.get('location_id') if data.get('location_id') else None,
-            assigned_technician_id=data.get('assigned_technician_id') if data.get('assigned_technician_id') else None,
-            assigned_team_id=data.get('assigned_team_id') if data.get('assigned_team_id') else None,
-            created_by_id=current_user.id,
-            estimated_duration=data.get('estimated_duration'),
-            scheduled_date=datetime.strptime(data['scheduled_date'], '%Y-%m-%dT%H:%M') if data.get('scheduled_date') else None,
-            due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M') if data.get('due_date') else None,
-            images=','.join(images) if images else None,
-            videos=','.join(videos) if videos else None,
-            voice_notes=','.join(voice_notes) if voice_notes else None
-        )
-        db.session.add(work_order)
-        db.session.commit()
-        flash('Work order created successfully!', 'success')
-        return redirect(url_for('work_orders_list'))
-    
+        # Only process files after form validation
+        form_valid = all([
+            data.get('title'),
+            data.get('description'),
+            data.get('equipment_id')
+        ])
+        # Add more required fields as needed
+        if form_valid:
+            # Handle image uploads
+            images = []
+            if 'images' in request.files:
+                uploaded_files = request.files.getlist('images')
+                static_folder = app.static_folder or ''
+                for file in uploaded_files:
+                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'image')
+                    if file_path:
+                        images.append(file_path)
+            # Handle video uploads
+            videos = []
+            if 'videos' in request.files:
+                uploaded_files = request.files.getlist('videos')
+                static_folder = app.static_folder or ''
+                for file in uploaded_files:
+                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'video')
+                    if file_path:
+                        videos.append(file_path)
+            # Handle voice note uploads
+            voice_notes = []
+            if 'voice_notes' in request.files:
+                uploaded_files = request.files.getlist('voice_notes')
+                static_folder = app.static_folder or ''
+                for file in uploaded_files:
+                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'audio')
+                    if file_path:
+                        voice_notes.append(file_path)
+            work_order = WorkOrder(
+                company_id=current_user.company_id,
+                work_order_number=generate_work_order_number(),
+                title=data['title'],
+                description=data['description'],
+                priority=data.get('priority', 'medium'),
+                type=data.get('type', 'corrective'),
+                equipment_id=data['equipment_id'],
+                location_id=data.get('location_id') if data.get('location_id') else None,
+                assigned_technician_id=data.get('assigned_technician_id') if data.get('assigned_technician_id') else None,
+                assigned_team_id=data.get('assigned_team_id') if data.get('assigned_team_id') else None,
+                created_by_id=current_user.id,
+                estimated_duration=data.get('estimated_duration'),
+                scheduled_date=datetime.strptime(data['scheduled_date'], '%Y-%m-%dT%H:%M') if data.get('scheduled_date') else None,
+                due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M') if data.get('due_date') else None,
+                images=','.join(images) if images else None,
+                videos=','.join(videos) if videos else None,
+                voice_notes=','.join(voice_notes) if voice_notes else None
+            )
+            db.session.add(work_order)
+            db.session.commit()
+            flash('Work order created successfully!', 'success')
+            return redirect(url_for('work_orders_list'))
+        else:
+            flash('Please fill all required fields.', 'error')
     equipment = filter_by_company(Equipment.query).all()
     technicians = filter_by_company(User.query).filter_by(role='technician').all()
     teams = filter_by_company(Team.query).all()
@@ -934,71 +941,73 @@ def work_order_edit(id):
     """Edit work order"""
     if not user_has_permission(current_user, 'workorder_edit'):
         abort(403)
-    
     work_order = WorkOrder.query.get_or_404(id)
     enforce_company_access(work_order)
-    
     if request.method == 'POST':
         data = request.form
-        
-        # Handle image uploads
-        images = []
-        if 'images' in request.files:
-            uploaded_files = request.files.getlist('images')
-            static_folder = app.static_folder or ''
-            for file in uploaded_files:
-                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'image')
-                if file_path:
-                    images.append(file_path)
-        
-        # Handle video uploads
-        videos = []
-        if 'videos' in request.files:
-            uploaded_files = request.files.getlist('videos')
-            static_folder = app.static_folder or ''
-            for file in uploaded_files:
-                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'video')
-                if file_path:
-                    videos.append(file_path)
-        
-        # Handle voice note uploads
-        voice_notes = []
-        if 'voice_notes' in request.files:
-            uploaded_files = request.files.getlist('voice_notes')
-            static_folder = app.static_folder or ''
-            for file in uploaded_files:
-                file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'audio')
-                if file_path:
-                    voice_notes.append(file_path)
-        
-        # Update work order fields
-        work_order.title = data['title']
-        work_order.description = data['description']
-        work_order.priority = data.get('priority', 'medium')
-        work_order.type = data.get('type', 'corrective')
-        work_order.equipment_id = data['equipment_id']
-        work_order.location_id = data.get('location_id') if data.get('location_id') else None
-        work_order.assigned_technician_id = data.get('assigned_technician_id') if data.get('assigned_technician_id') else None
-        work_order.assigned_team_id = data.get('assigned_team_id') if data.get('assigned_team_id') else None
-        work_order.estimated_duration = data.get('estimated_duration')
-        work_order.scheduled_date = datetime.strptime(data['scheduled_date'], '%Y-%m-%dT%H:%M') if data.get('scheduled_date') else None
-        work_order.due_date = datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M') if data.get('due_date') else None
-        
-        # Update media files (append to existing)
-        if images:
-            existing_images = work_order.images.split(',') if work_order.images else []
-            work_order.images = ','.join(existing_images + images)
-        if videos:
-            existing_videos = work_order.videos.split(',') if work_order.videos else []
-            work_order.videos = ','.join(existing_videos + videos)
-        if voice_notes:
-            existing_voice_notes = work_order.voice_notes.split(',') if work_order.voice_notes else []
-            work_order.voice_notes = ','.join(existing_voice_notes + voice_notes)
-        
-        db.session.commit()
-        flash('Work order updated successfully!', 'success')
-        return redirect(url_for('work_order_detail', id=work_order.id))
-    
+        form_valid = all([
+            data.get('title'),
+            data.get('description'),
+            data.get('equipment_id')
+        ])
+        if form_valid:
+            # Handle image uploads
+            images = []
+            if 'images' in request.files:
+                uploaded_files = request.files.getlist('images')
+                static_folder = app.static_folder or ''
+                for file in uploaded_files:
+                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'image')
+                    if file_path:
+                        images.append(file_path)
+            # Handle video uploads
+            videos = []
+            if 'videos' in request.files:
+                uploaded_files = request.files.getlist('videos')
+                static_folder = app.static_folder or ''
+                for file in uploaded_files:
+                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'video')
+                    if file_path:
+                        videos.append(file_path)
+            # Handle voice note uploads
+            voice_notes = []
+            if 'voice_notes' in request.files:
+                uploaded_files = request.files.getlist('voice_notes')
+                static_folder = app.static_folder or ''
+                for file in uploaded_files:
+                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'audio')
+                    if file_path:
+                        voice_notes.append(file_path)
+            # Update work order fields
+            work_order.title = data['title']
+            work_order.description = data['description']
+            work_order.priority = data.get('priority', 'medium')
+            work_order.type = data.get('type', 'corrective')
+            work_order.equipment_id = data['equipment_id']
+            work_order.location_id = data.get('location_id') if data.get('location_id') else None
+            work_order.assigned_technician_id = data.get('assigned_technician_id') if data.get('assigned_technician_id') else None
+            work_order.assigned_team_id = data.get('assigned_team_id') if data.get('assigned_team_id') else None
+            estimated_duration = data.get('estimated_duration')
+            if estimated_duration == '':
+                estimated_duration = None
+            work_order.estimated_duration = estimated_duration
+            work_order.scheduled_date = datetime.strptime(data['scheduled_date'], '%Y-%m-%dT%H:%M') if data.get('scheduled_date') else None
+            work_order.due_date = datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M') if data.get('due_date') else None
+            # Update media files (append to existing)
+            if images:
+                existing_images = work_order.images.split(',') if work_order.images else []
+                work_order.images = ','.join(existing_images + images)
+            if videos:
+                existing_videos = work_order.videos.split(',') if work_order.videos else []
+                work_order.videos = ','.join(existing_videos + videos)
+            if voice_notes:
+                existing_voice_notes = work_order.voice_notes.split(',') if work_order.voice_notes else []
+                work_order.voice_notes = ','.join(existing_voice_notes + voice_notes)
+            db.session.commit()
+            flash('Work order updated successfully!', 'success')
+            return redirect(url_for('work_order_detail', id=work_order.id))
+        else:
+            flash('Please fill all required fields.', 'error')
     equipment = filter_by_company(Equipment.query).all()
     technicians = filter_by_company(User.query).filter_by(role='technician').all()
     teams = filter_by_company(Team.query).all()
@@ -1008,24 +1017,29 @@ def work_order_edit(id):
 @app.route('/work-orders/<int:id>/delete', methods=['POST'])
 @login_required
 def work_order_delete(id):
-    """Delete work order"""
+    """Delete work order and associated files"""
     if not user_has_permission(current_user, 'workorder_delete'):
         abort(403)
-    
     work_order = WorkOrder.query.get_or_404(id)
     enforce_company_access(work_order)
-    
+    # Delete associated comment files
+    comments = WorkOrderComment.query.filter_by(work_order_id=id).all()
+    for comment in comments:
+        delete_files(comment.images)
+        delete_files(comment.videos)
+        delete_files(comment.voice_notes)
     # Delete associated comments
     WorkOrderComment.query.filter_by(work_order_id=id).delete()
-    
     # Delete associated checklist items
     WorkOrderChecklist.query.filter_by(work_order_id=id).delete()
-    
+    # Delete work order files
+    delete_files(work_order.images)
+    delete_files(work_order.videos)
+    delete_files(work_order.voice_notes)
     # Delete the work order
     db.session.delete(work_order)
     db.session.commit()
-    
-    flash('Work order deleted successfully!', 'success')
+    flash('Work order and associated files deleted successfully!', 'success')
     return redirect(url_for('work_orders_list'))
 
 @app.route('/work-orders/<int:id>/add-comment', methods=['POST'])
@@ -1569,108 +1583,14 @@ class LocationForm(FlaskForm):
     name = StringField('Location Name', validators=[DataRequired(), Length(max=200)])
     address = TextAreaField('Address', validators=[Optional(), Length(max=500)])
     city = StringField('City', validators=[Optional(), Length(max=100)])
-    state = StringField('State/Province', validators=[Optional(), Length(max=50)])
+    state = SelectField('State/Province', choices=[('', 'Select State/Province')], validators=[Optional()])
+    # Dynamically generate country choices using pycountry
+    country_choices = [('', 'Select Country')] + sorted([
+        (getattr(c, 'name', getattr(c, 'common_name', '')), getattr(c, 'name', getattr(c, 'common_name', '')))
+        for c in pycountry.countries
+    ], key=lambda x: x[1])
+    country = SelectField('Country', choices=country_choices, validators=[Optional()])
     zip_code = StringField('ZIP/Postal Code', validators=[Optional(), Length(max=20)])
-    country = SelectField('Country', choices=[
-        ('', 'Select Country'),
-        ('United States', 'United States'),
-        ('Canada', 'Canada'),
-        ('United Kingdom', 'United Kingdom'),
-        ('Germany', 'Germany'),
-        ('France', 'France'),
-        ('Italy', 'Italy'),
-        ('Spain', 'Spain'),
-        ('Netherlands', 'Netherlands'),
-        ('Belgium', 'Belgium'),
-        ('Switzerland', 'Switzerland'),
-        ('Austria', 'Austria'),
-        ('Sweden', 'Sweden'),
-        ('Norway', 'Norway'),
-        ('Denmark', 'Denmark'),
-        ('Finland', 'Finland'),
-        ('Poland', 'Poland'),
-        ('Czech Republic', 'Czech Republic'),
-        ('Hungary', 'Hungary'),
-        ('Slovakia', 'Slovakia'),
-        ('Slovenia', 'Slovenia'),
-        ('Croatia', 'Croatia'),
-        ('Serbia', 'Serbia'),
-        ('Bulgaria', 'Bulgaria'),
-        ('Romania', 'Romania'),
-        ('Greece', 'Greece'),
-        ('Portugal', 'Portugal'),
-        ('Ireland', 'Ireland'),
-        ('Iceland', 'Iceland'),
-        ('Luxembourg', 'Luxembourg'),
-        ('Malta', 'Malta'),
-        ('Cyprus', 'Cyprus'),
-        ('Estonia', 'Estonia'),
-        ('Latvia', 'Latvia'),
-        ('Lithuania', 'Lithuania'),
-        ('Australia', 'Australia'),
-        ('New Zealand', 'New Zealand'),
-        ('Japan', 'Japan'),
-        ('South Korea', 'South Korea'),
-        ('China', 'China'),
-        ('India', 'India'),
-        ('Israel', 'Israel'),
-        ('Brazil', 'Brazil'),
-        ('Argentina', 'Argentina'),
-        ('Chile', 'Chile'),
-        ('Mexico', 'Mexico'),
-        ('South Africa', 'South Africa'),
-        ('Egypt', 'Egypt'),
-        ('Morocco', 'Morocco'),
-        ('Tunisia', 'Tunisia'),
-        ('Algeria', 'Algeria'),
-        ('Libya', 'Libya'),
-        ('Sudan', 'Sudan'),
-        ('Ethiopia', 'Ethiopia'),
-        ('Kenya', 'Kenya'),
-        ('Nigeria', 'Nigeria'),
-        ('Ghana', 'Ghana'),
-        ('Senegal', 'Senegal'),
-        ('Ivory Coast', 'Ivory Coast'),
-        ('Cameroon', 'Cameroon'),
-        ('Gabon', 'Gabon'),
-        ('Congo', 'Congo'),
-        ('Democratic Republic of the Congo', 'Democratic Republic of the Congo'),
-        ('Angola', 'Angola'),
-        ('Zambia', 'Zambia'),
-        ('Zimbabwe', 'Zimbabwe'),
-        ('Botswana', 'Botswana'),
-        ('Namibia', 'Namibia'),
-        ('Mozambique', 'Mozambique'),
-        ('Madagascar', 'Madagascar'),
-        ('Mauritius', 'Mauritius'),
-        ('Seychelles', 'Seychelles'),
-        ('Comoros', 'Comoros'),
-        ('Djibouti', 'Djibouti'),
-        ('Somalia', 'Somalia'),
-        ('Eritrea', 'Eritrea'),
-        ('Tanzania', 'Tanzania'),
-        ('Uganda', 'Uganda'),
-        ('Rwanda', 'Rwanda'),
-        ('Burundi', 'Burundi'),
-        ('Central African Republic', 'Central African Republic'),
-        ('Chad', 'Chad'),
-        ('Niger', 'Niger'),
-        ('Mali', 'Mali'),
-        ('Burkina Faso', 'Burkina Faso'),
-        ('Guinea', 'Guinea'),
-        ('Guinea-Bissau', 'Guinea-Bissau'),
-        ('Sierra Leone', 'Sierra Leone'),
-        ('Liberia', 'Liberia'),
-        ('Togo', 'Togo'),
-        ('Benin', 'Benin'),
-        ('Equatorial Guinea', 'Equatorial Guinea'),
-        ('Sao Tome and Principe', 'Sao Tome and Principe'),
-        ('Cape Verde', 'Cape Verde'),
-        ('Gambia', 'Gambia'),
-        ('Mauritania', 'Mauritania'),
-        ('Western Sahara', 'Western Sahara'),
-        ('Other', 'Other')
-    ], validators=[Optional()])
     latitude = FloatField('Latitude', validators=[Optional()])
     longitude = FloatField('Longitude', validators=[Optional()])
     description = TextAreaField('Description', validators=[Optional(), Length(max=1000)])
@@ -1996,13 +1916,27 @@ def locations_list():
     locations = filter_by_company(Location.query).all()
     return render_template('locations/list.html', locations=locations)
 
+def get_subdivisions_for_country(country_name):
+    import pycountry
+    # Try to match by name or official_name
+    country = next((c for c in pycountry.countries if getattr(c, 'name', None) == country_name or getattr(c, 'official_name', None) == country_name), None)
+    alpha_2 = getattr(country, 'alpha_2', None)
+    if not country or not isinstance(alpha_2, str):
+        return [('', 'Select State/Province')]
+    subdivisions = pycountry.subdivisions.get(country_code=alpha_2)
+    if not subdivisions:
+        return [('', 'Select State/Province')]
+    return [('', 'Select State/Province')] + [(sub.code, sub.name) for sub in subdivisions]
+
 @app.route('/locations/new', methods=['GET', 'POST'])
 @login_required
 def location_new():
     if not user_has_permission(current_user, 'location_create'):
         abort(403)
     form = LocationForm()
-    
+    if request.method == 'POST':
+        country_name = request.form.get('country')
+        form.state.choices = get_subdivisions_for_country(country_name)  # type: ignore
     if form.validate_on_submit():
         location = Location(
             company_id=current_user.company_id,
@@ -2023,7 +1957,6 @@ def location_new():
         db.session.commit()
         flash('Location created successfully!', 'success')
         return redirect(url_for('locations_list'))
-    
     return render_template('locations/new.html', form=form)
 
 @app.route('/locations/<int:id>')
@@ -2044,7 +1977,9 @@ def location_edit(id):
     location = Location.query.get_or_404(id)
     enforce_company_access(location)
     form = LocationForm(obj=location)
-    
+    if request.method == 'POST':
+        country_name = request.form.get('country')
+        form.state.choices = get_subdivisions_for_country(country_name)  # type: ignore
     if form.validate_on_submit():
         location.name = form.name.data
         location.address = form.address.data
@@ -2058,11 +1993,9 @@ def location_edit(id):
         location.contact_person = form.contact_person.data
         location.contact_phone = form.contact_phone.data
         location.contact_email = form.contact_email.data
-        
         db.session.commit()
         flash('Location updated successfully!', 'success')
-        return redirect(url_for('location_detail', id=id))
-    
+        return redirect(url_for('locations_list'))
     return render_template('locations/edit.html', form=form, location=location)
 
 @app.route('/locations/<int:id>/delete', methods=['POST'])
@@ -5206,7 +5139,6 @@ def quick_maintenance_schedule():
 def qr_failure_report(equipment_id):
     """QR code failure reporting page"""
     equipment = Equipment.query.filter_by(id=equipment_id).first_or_404()
-    
     if request.method == 'POST':
         try:
             # Get form data
@@ -5215,52 +5147,39 @@ def qr_failure_report(equipment_id):
             urgency = request.form.get('urgency', 'high')
             reporter_name = request.form.get('reporter_name', '').strip()
             reporter_phone = request.form.get('reporter_phone', '').strip()
-            
+            estimated_duration = request.form.get('estimated_duration')
+            if estimated_duration == '':
+                estimated_duration = None
             if not description:
                 flash('Please provide a description of the failure.', 'error')
                 return render_template('qr_failure_report.html', equipment=equipment)
-            
-            # Handle file uploads
+            # Only save files if form is valid
             images = []
             videos = []
             audio_files = []
-            
-            # Handle image uploads
+            static_folder = app.static_folder or ''
             if 'images' in request.files:
                 for file in request.files.getlist('images'):
-                    if file and file.filename:
-                        file_path = save_uploaded_file(file, 'static/uploads/work_orders', 'image')
-                        if file_path:
-                            images.append(file_path)
-            
-            # Handle video uploads
+                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'image')
+                    if file_path:
+                        images.append(file_path)
             if 'videos' in request.files:
                 for file in request.files.getlist('videos'):
-                    if file and file.filename:
-                        file_path = save_uploaded_file(file, 'static/uploads/work_orders', 'video')
-                        if file_path:
-                            videos.append(file_path)
-            
-            # Handle audio uploads
+                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'video')
+                    if file_path:
+                        videos.append(file_path)
             if 'audio_files' in request.files:
                 for file in request.files.getlist('audio_files'):
-                    if file and file.filename:
-                        file_path = save_uploaded_file(file, 'static/uploads/work_orders', 'audio')
-                        if file_path:
-                            audio_files.append(file_path)
-            
-            # Find the technician with the lowest number of assigned work orders in the same company
+                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'audio')
+                    if file_path:
+                        audio_files.append(file_path)
             from models import User, WorkOrder
             technicians = User.query.filter_by(company_id=equipment.company_id, role='technician', is_active=True).all()
             technician_id = None
             if technicians:
-                # Get (technician, count) tuples
                 tech_counts = [(tech, WorkOrder.query.filter_by(assigned_technician_id=tech.id).count()) for tech in technicians]
-                # Sort by count, then by id for stability
                 tech_counts.sort(key=lambda x: (x[1], x[0].id))
                 technician_id = tech_counts[0][0].id
-
-            # Create work order
             work_order = WorkOrder(
                 company_id=equipment.company_id,
                 work_order_number=generate_work_order_number(),
@@ -5270,32 +5189,26 @@ def qr_failure_report(equipment_id):
                 status='open',
                 type='corrective',
                 equipment_id=equipment.id,
-                assigned_technician_id=technician_id,  # <-- Assign to least busy technician
+                assigned_technician_id=technician_id,
                 created_by_id=1,  # Default admin user, you might want to handle this differently
                 scheduled_date=datetime.now(),
                 due_date=datetime.now() + timedelta(hours=4) if urgency == 'high' else datetime.now() + timedelta(days=1),
                 images=','.join(images) if images else None,
                 videos=','.join(videos) if videos else None,
-                voice_notes=','.join(audio_files) if audio_files else None
+                voice_notes=','.join(audio_files) if audio_files else None,
+                estimated_duration=estimated_duration
             )
-            
             db.session.add(work_order)
-            
-            # Update equipment status to maintenance if it was operational
             if equipment.status == 'operational':
                 equipment.status = 'maintenance'
                 equipment.updated_at = datetime.utcnow()
-            
             db.session.commit()
-            
             flash(f'Failure report submitted successfully! Work Order #{work_order.work_order_number} has been created.', 'success')
             return render_template('qr_failure_report_success.html', work_order=work_order, equipment=equipment)
-            
         except Exception as e:
             db.session.rollback()
             flash(f'Error submitting report: {str(e)}', 'error')
             return render_template('qr_failure_report.html', equipment=equipment)
-    
     return render_template('qr_failure_report.html', equipment=equipment)
 
 @app.route('/api/qr-equipment/<equipment_id>')
@@ -6097,6 +6010,27 @@ Technical Specifications:
         return jsonify({'success': True, 'specifications': generated})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/subdivisions/<country_code>')
+def api_subdivisions(country_code):
+    import pycountry
+    subdivisions = pycountry.subdivisions.get(country_code=country_code)
+    result = [(sub.code, sub.name) for sub in subdivisions] if subdivisions else []
+    return jsonify(result)
+
+def delete_files(file_paths):
+    if not file_paths:
+        return
+    if isinstance(file_paths, str):
+        file_paths = file_paths.split(',')
+    for path in file_paths:
+        if path:
+            abs_path = os.path.join(app.static_folder or '', path) if not os.path.isabs(path) else path
+            try:
+                if os.path.exists(abs_path):
+                    os.remove(abs_path)
+            except Exception:
+                pass
 
 if __name__ == '__main__':
     print(os.getenv('MAIL_USE_TLS'))
