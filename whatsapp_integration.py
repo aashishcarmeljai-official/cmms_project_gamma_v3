@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from flask import current_app
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 from models import db, WhatsAppUser, WhatsAppMessage, WhatsAppTemplate, NotificationLog, WorkOrder, User, Equipment, MaintenanceSchedule, EmergencyBroadcast
 import uuid
 
@@ -21,7 +21,6 @@ class WhatsAppIntegration:
         self.phone_number_id = os.getenv('WHATSAPP_PHONE_NUMBER_ID')
         self.verify_token = os.getenv('WHATSAPP_VERIFY_TOKEN')
         self.base_url = "https://graph.facebook.com/v18.0"
-        self.translator = Translator()
         
         if not all([self.access_token, self.phone_number_id]):
             logger.warning("WhatsApp credentials not configured. WhatsApp features will be disabled.")
@@ -136,13 +135,12 @@ class WhatsAppIntegration:
             return {'success': False, 'error': str(e)}
     
     def translate_message(self, message: str, target_language: str) -> str:
-        """Translate message to target language"""
+        """Translate message to target language using deep-translator"""
         try:
             if target_language == 'en':
                 return message
-            
-            translation = self.translator.translate(message, dest=target_language)
-            return translation.text
+            translation = GoogleTranslator(source='auto', target=target_language).translate(message)
+            return translation if translation is not None else message
         except Exception as e:
             logger.error(f"Translation error: {str(e)}")
             return message
