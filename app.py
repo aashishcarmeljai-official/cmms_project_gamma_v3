@@ -23,6 +23,7 @@ from flask.cli import with_appcontext
 import click
 from extensions import db
 from sqlalchemy.orm import joinedload
+import openai
 
 # Load environment variables
 load_dotenv()
@@ -5993,6 +5994,110 @@ def register_commands(app):
 
 register_commands(app)
 
+@app.errorhandler(403)
+def forbidden_error(error):
+    flash('You do not have permission to access this resource.', 'error')
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    else:
+        return redirect(url_for('login'))
+
+@app.route('/locations/ajax-new', methods=['POST'])
+@login_required
+def ajax_location_new():
+    if not user_has_permission(current_user, 'location_create'):
+        abort(403)
+    data = request.form
+
+    # Convert empty strings to None for float fields
+    def parse_float(val):
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
+    location = Location(
+        company_id=current_user.company_id,
+        name=data.get('name'),
+        address=data.get('address'),
+        city=data.get('city'),
+        state=data.get('state'),
+        zip_code=data.get('zip_code'),
+        country=data.get('country', 'USA'),
+        latitude=parse_float(data.get('latitude')),
+        longitude=parse_float(data.get('longitude')),
+        description=data.get('description'),
+        contact_person=data.get('contact_person'),
+        contact_phone=data.get('contact_phone'),
+        contact_email=data.get('contact_email')
+    )
+    try:
+        db.session.add(location)
+        db.session.commit()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': True,
+                'message': 'Location created successfully!',
+                'location': location.to_dict()
+            })
+        flash('Location created successfully!', 'success')
+        return redirect(url_for('locations_list'))
+    except Exception as e:
+        db.session.rollback()
+        error_msg = f'Error creating location: {str(e)}'
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': False,
+                'error': error_msg
+            })
+        flash(error_msg, 'error')
+        return redirect(url_for('locations_list'))
+
+@app.route('/api/generate-specs', methods=['POST'])
+@login_required
+def api_generate_specs():
+    if not user_has_permission(current_user, 'equipment_create'):
+        return jsonify({'success': False, 'error': 'Permission denied'}), 403
+    data = request.json or {}
+    name = data.get('name', '')
+    model = data.get('model', '')
+    manufacturer = data.get('manufacturer', '')
+    category = data.get('category', '')
+    serial_number = data.get('serial_number', '')
+    description = data.get('description', '')
+
+    prompt = f"""
+Generate a detailed technical specification for the following equipment:
+
+Name: {name}
+Model: {model}
+Manufacturer: {manufacturer}
+Category: {category}
+Serial Number: {serial_number}
+Description: {description}
+
+Technical Specifications:
+"""
+
+    try:
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            return jsonify({'success': False, 'error': 'OpenAI API key not set'}), 500
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that writes technical specifications for equipment."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300,
+            temperature=0.7
+        )
+        generated = response.choices[0].message.content.strip()
+        return jsonify({'success': True, 'specifications': generated})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
     print(os.getenv('MAIL_USE_TLS'))
     import sys
@@ -6007,11 +6112,3 @@ if __name__ == '__main__':
     else:
         print(os.getenv('DATABASE_URL'))
         app.run(debug=True)
-
-@app.errorhandler(403)
-def forbidden_error(error):
-    flash('You do not have permission to access this resource.', 'error')
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    else:
-        return redirect(url_for('login'))

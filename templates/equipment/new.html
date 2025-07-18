@@ -109,13 +109,18 @@
                             
                             <div class="mb-3">
                                 <label for="location_id" class="form-label">Location</label>
-                                <select class="form-select" id="location_id" name="location_id">
-                                    <option value="">Select Location</option>
-                                    {% for location in locations %}
-                                        <option value="{{ location.id }}">{{ location.name }}</option>
-                                    {% endfor %}
-                                </select>
-                                <div class="form-text">Choose from available locations or leave blank</div>
+                                <div class="input-group">
+                                    <select class="form-select" id="location_id" name="location_id">
+                                        <option value="">Select Location</option>
+                                        {% for location in locations %}
+                                            <option value="{{ location.id }}">{{ location.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#addLocationModal">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text">Choose from available locations or add a new one</div>
                             </div>
                             
                             <div class="mb-3">
@@ -143,7 +148,13 @@
                             
                             <div class="mb-3">
                                 <label for="specifications" class="form-label">Technical Specifications</label>
-                                <textarea class="form-control" id="specifications" name="specifications" rows="4" placeholder="Technical specifications, operating parameters, etc."></textarea>
+                                <div class="input-group">
+                                    <textarea class="form-control" id="specifications" name="specifications" rows="4" placeholder="Technical specifications, operating parameters, etc."></textarea>
+                                    <button class="btn btn-outline-primary" type="button" id="generateSpecsBtn" onclick="generateSpecs()">
+                                        <span id="generateSpecsBtnText">Generate</span>
+                                        <span id="generateSpecsSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -202,6 +213,173 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="addNewCategory()">Add Category</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Location Modal -->
+<div class="modal fade" id="addLocationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Location</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addLocationForm">
+                    <div class="mb-3">
+                        <label for="newLocationName" class="form-label">Location Name *</label>
+                        <input type="text" class="form-control" id="newLocationName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newLocationAddress" class="form-label">Address</label>
+                        <textarea class="form-control" id="newLocationAddress" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newLocationCity" class="form-label">City</label>
+                        <input type="text" class="form-control" id="newLocationCity">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newLocationState" class="form-label">State/Province</label>
+                        <input type="text" class="form-control" id="newLocationState">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newLocationZip" class="form-label">ZIP/Postal Code</label>
+                        <input type="text" class="form-control" id="newLocationZip">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newLocationCountry" class="form-label">Country</label>
+                        <select class="form-select" id="newLocationCountry">
+                            <option value="">Select Country</option>
+                            <option value="United States" selected>United States</option>
+                            <option value="Canada">Canada</option>
+                            <option value="United Kingdom">United Kingdom</option>
+                            <option value="Germany">Germany</option>
+                            <option value="France">France</option>
+                            <option value="Italy">Italy</option>
+                            <option value="Spain">Spain</option>
+                            <option value="Netherlands">Netherlands</option>
+                            <option value="Belgium">Belgium</option>
+                            <option value="Switzerland">Switzerland</option>
+                            <option value="Austria">Austria</option>
+                            <option value="Sweden">Sweden</option>
+                            <option value="Norway">Norway</option>
+                            <option value="Denmark">Denmark</option>
+                            <option value="Finland">Finland</option>
+                            <option value="Poland">Poland</option>
+                            <option value="Czech Republic">Czech Republic</option>
+                            <option value="Hungary">Hungary</option>
+                            <option value="Slovakia">Slovakia</option>
+                            <option value="Slovenia">Slovenia</option>
+                            <option value="Croatia">Croatia</option>
+                            <option value="Serbia">Serbia</option>
+                            <option value="Bulgaria">Bulgaria</option>
+                            <option value="Romania">Romania</option>
+                            <option value="Greece">Greece</option>
+                            <option value="Portugal">Portugal</option>
+                            <option value="Ireland">Ireland</option>
+                            <option value="Iceland">Iceland</option>
+                            <option value="Luxembourg">Luxembourg</option>
+                            <option value="Malta">Malta</option>
+                            <option value="Cyprus">Cyprus</option>
+                            <option value="Estonia">Estonia</option>
+                            <option value="Latvia">Latvia</option>
+                            <option value="Lithuania">Lithuania</option>
+                            <option value="Australia">Australia</option>
+                            <option value="New Zealand">New Zealand</option>
+                            <option value="Japan">Japan</option>
+                            <option value="South Korea">South Korea</option>
+                            <option value="China">China</option>
+                            <option value="India">India</option>
+                            <option value="Israel">Israel</option>
+                            <option value="Brazil">Brazil</option>
+                            <option value="Argentina">Argentina</option>
+                            <option value="Chile">Chile</option>
+                            <option value="Mexico">Mexico</option>
+                            <option value="South Africa">South Africa</option>
+                            <option value="Egypt">Egypt</option>
+                            <option value="Morocco">Morocco</option>
+                            <option value="Tunisia">Tunisia</option>
+                            <option value="Algeria">Algeria</option>
+                            <option value="Libya">Libya</option>
+                            <option value="Sudan">Sudan</option>
+                            <option value="Ethiopia">Ethiopia</option>
+                            <option value="Kenya">Kenya</option>
+                            <option value="Nigeria">Nigeria</option>
+                            <option value="Ghana">Ghana</option>
+                            <option value="Senegal">Senegal</option>
+                            <option value="Ivory Coast">Ivory Coast</option>
+                            <option value="Cameroon">Cameroon</option>
+                            <option value="Gabon">Gabon</option>
+                            <option value="Congo">Congo</option>
+                            <option value="Democratic Republic of the Congo">Democratic Republic of the Congo</option>
+                            <option value="Angola">Angola</option>
+                            <option value="Zambia">Zambia</option>
+                            <option value="Zimbabwe">Zimbabwe</option>
+                            <option value="Botswana">Botswana</option>
+                            <option value="Namibia">Namibia</option>
+                            <option value="Mozambique">Mozambique</option>
+                            <option value="Madagascar">Madagascar</option>
+                            <option value="Mauritius">Mauritius</option>
+                            <option value="Seychelles">Seychelles</option>
+                            <option value="Comoros">Comoros</option>
+                            <option value="Djibouti">Djibouti</option>
+                            <option value="Somalia">Somalia</option>
+                            <option value="Eritrea">Eritrea</option>
+                            <option value="Tanzania">Tanzania</option>
+                            <option value="Uganda">Uganda</option>
+                            <option value="Rwanda">Rwanda</option>
+                            <option value="Burundi">Burundi</option>
+                            <option value="Central African Republic">Central African Republic</option>
+                            <option value="Chad">Chad</option>
+                            <option value="Niger">Niger</option>
+                            <option value="Mali">Mali</option>
+                            <option value="Burkina Faso">Burkina Faso</option>
+                            <option value="Guinea">Guinea</option>
+                            <option value="Guinea-Bissau">Guinea-Bissau</option>
+                            <option value="Sierra Leone">Sierra Leone</option>
+                            <option value="Liberia">Liberia</option>
+                            <option value="Togo">Togo</option>
+                            <option value="Benin">Benin</option>
+                            <option value="Equatorial Guinea">Equatorial Guinea</option>
+                            <option value="Sao Tome and Principe">Sao Tome and Principe</option>
+                            <option value="Cape Verde">Cape Verde</option>
+                            <option value="Gambia">Gambia</option>
+                            <option value="Mauritania">Mauritania</option>
+                            <option value="Western Sahara">Western Sahara</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newLocationLatitude" class="form-label">Latitude</label>
+                        <input type="number" step="any" class="form-control" id="newLocationLatitude">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newLocationLongitude" class="form-label">Longitude</label>
+                        <input type="number" step="any" class="form-control" id="newLocationLongitude">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newLocationDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="newLocationDescription" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newLocationContactPerson" class="form-label">Contact Person</label>
+                        <input type="text" class="form-control" id="newLocationContactPerson">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newLocationContactPhone" class="form-label">Contact Phone</label>
+                        <input type="text" class="form-control" id="newLocationContactPhone">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newLocationContactEmail" class="form-label">Contact Email</label>
+                        <input type="email" class="form-control" id="newLocationContactEmail">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addNewLocation()">Add Location</button>
             </div>
         </div>
     </div>
@@ -278,6 +456,69 @@
         });
     }
     
+    // Add new location function
+    function addNewLocation() {
+        const name = document.getElementById('newLocationName').value.trim();
+        const address = document.getElementById('newLocationAddress').value.trim();
+        const city = document.getElementById('newLocationCity').value.trim();
+        const state = document.getElementById('newLocationState').value.trim();
+        const zip = document.getElementById('newLocationZip').value.trim();
+        const country = document.getElementById('newLocationCountry').value.trim();
+        const latitude = document.getElementById('newLocationLatitude').value.trim();
+        const longitude = document.getElementById('newLocationLongitude').value.trim();
+        const description = document.getElementById('newLocationDescription').value.trim();
+        const contact_person = document.getElementById('newLocationContactPerson').value.trim();
+        const contact_phone = document.getElementById('newLocationContactPhone').value.trim();
+        const contact_email = document.getElementById('newLocationContactEmail').value.trim();
+
+        if (!name) {
+            alert('Please enter a location name');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('address', address);
+        formData.append('city', city);
+        formData.append('state', state);
+        formData.append('zip_code', zip);
+        formData.append('country', country);
+        formData.append('latitude', latitude);
+        formData.append('longitude', longitude);
+        formData.append('description', description);
+        formData.append('contact_person', contact_person);
+        formData.append('contact_phone', contact_phone);
+        formData.append('contact_email', contact_email);
+
+        fetch('/locations/ajax-new', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const locationSelect = document.getElementById('location_id');
+                const newOption = document.createElement('option');
+                newOption.value = data.location.id;
+                newOption.textContent = data.location.name;
+                locationSelect.appendChild(newOption);
+                locationSelect.value = data.location.id;
+                bootstrap.Modal.getInstance(document.getElementById('addLocationModal')).hide();
+                document.getElementById('addLocationForm').reset();
+                alert('Location added successfully!');
+            } else {
+                alert('Error: ' + (data.error || 'Failed to add location'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error adding location. Please try again.');
+        });
+    }
+    
     // Form validation
     document.querySelector('form').addEventListener('submit', function(e) {
         const name = document.getElementById('name').value.trim();
@@ -290,7 +531,56 @@
             return false;
         }
     });
-    
 
+    function generateSpecs() {
+        const btn = document.getElementById('generateSpecsBtn');
+        const btnText = document.getElementById('generateSpecsBtnText');
+        const spinner = document.getElementById('generateSpecsSpinner');
+        btn.disabled = true;
+        btnText.classList.add('d-none');
+        spinner.classList.remove('d-none');
+
+        // Gather form values
+        const name = document.getElementById('name').value.trim();
+        const model = document.getElementById('model').value.trim();
+        const manufacturer = document.getElementById('manufacturer').value.trim();
+        const category = document.getElementById('category').value;
+        const serial_number = document.getElementById('serial_number').value.trim();
+        const description = document.getElementById('description').value.trim();
+
+        fetch('/api/generate-specs', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                name,
+                model,
+                manufacturer,
+                category,
+                serial_number,
+                description
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('specifications').value = data.specifications;
+            } else {
+                alert('Error: ' + (data.error || 'Failed to generate specifications'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error generating specifications. Please try again.');
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btnText.classList.remove('d-none');
+            spinner.classList.add('d-none');
+        });
+    }
+    
 </script>
 {% endblock %} 
