@@ -704,6 +704,39 @@ body {
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     padding: 8px 0;
+    position: absolute !important;
+    z-index: 1050 !important;
+}
+
+/* Navbar dropdown positioning */
+.navbar-nav .dropdown-menu {
+    position: absolute !important;
+    right: 0 !important;
+    left: auto !important;
+    transform: none !important;
+    margin-top: 0.125rem !important;
+    min-width: 10rem !important;
+    max-width: 20rem !important;
+}
+
+/* Ensure dropdown doesn't overflow viewport */
+.navbar-nav .dropdown-menu.dropdown-menu-end {
+    right: 0 !important;
+    left: auto !important;
+}
+
+/* Mobile responsive dropdown */
+@media (max-width: 991.98px) {
+    .navbar-nav .dropdown-menu {
+        position: static !important;
+        float: none !important;
+        width: auto !important;
+        margin-top: 0 !important;
+        background-color: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
 }
 
 .dropdown-item {

@@ -11,6 +11,14 @@
         /* Ensure dropdowns work properly across all pages */
         .dropdown-menu {
             z-index: 1050 !important;
+            position: absolute !important;
+            transform: none !important;
+            top: 100% !important;
+            left: auto !important;
+            right: 0 !important;
+            margin-top: 0.125rem !important;
+            min-width: 10rem !important;
+            max-width: 20rem !important;
         }
         
         .navbar .dropdown-menu {
@@ -24,6 +32,33 @@
         /* Fix any potential display issues */
         .dropdown-menu.show {
             display: block !important;
+        }
+        
+        /* Ensure dropdowns don't go outside viewport */
+        .navbar-nav .dropdown-menu {
+            position: absolute !important;
+            right: 0 !important;
+            left: auto !important;
+            transform: none !important;
+        }
+        
+        /* For right-aligned dropdowns in navbar */
+        .navbar-nav .dropdown-menu.dropdown-menu-end {
+            right: 0 !important;
+            left: auto !important;
+        }
+        
+        /* Prevent dropdown from going off-screen */
+        @media (max-width: 991.98px) {
+            .navbar-nav .dropdown-menu {
+                position: static !important;
+                float: none !important;
+                width: auto !important;
+                margin-top: 0 !important;
+                background-color: transparent !important;
+                border: 0 !important;
+                box-shadow: none !important;
+            }
         }
         /* Uniform dropdowns in admin pages */
         .admin-page .form-select {
@@ -165,7 +200,7 @@
                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fas fa-user me-1"></i>{{ current_user.first_name or current_user.username }}
                             </a>
-                            <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
                                 <li><a class="dropdown-item" href="{{ url_for('profile') }}"><i class="fas fa-user-circle me-2"></i>Profile</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('whatsapp_settings') }}"><i class="fab fa-whatsapp me-2"></i>WhatsApp Settings</a></li>
                                 <li><hr class="dropdown-divider"></li>
@@ -217,6 +252,29 @@
             var dropdownElementList = [].slice.call(document.querySelectorAll('.dropdown-toggle'));
             var dropdownList = dropdownElementList.map(function (dropdownToggleEl) {
                 return new bootstrap.Dropdown(dropdownToggleEl);
+            });
+            
+            // Handle dropdown positioning to prevent overflow
+            document.addEventListener('show.bs.dropdown', function(event) {
+                var dropdownMenu = event.target.querySelector('.dropdown-menu');
+                if (dropdownMenu) {
+                    // Check if dropdown would overflow the right edge
+                    var rect = dropdownMenu.getBoundingClientRect();
+                    var viewportWidth = window.innerWidth;
+                    
+                    if (rect.right > viewportWidth) {
+                        dropdownMenu.style.right = '0';
+                        dropdownMenu.style.left = 'auto';
+                    }
+                    
+                    // Check if dropdown would overflow the bottom edge
+                    if (rect.bottom > window.innerHeight) {
+                        dropdownMenu.style.top = 'auto';
+                        dropdownMenu.style.bottom = '100%';
+                        dropdownMenu.style.marginTop = '0';
+                        dropdownMenu.style.marginBottom = '0.125rem';
+                    }
+                }
             });
             
             // Debug: Log dropdown elements

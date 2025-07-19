@@ -235,6 +235,27 @@ def get_dashboard_stats():
     }
     return stats
 
+def get_technician_dashboard_stats(user):
+    """Get dashboard statistics for technicians (showing only assigned work orders)"""
+    # Get work orders assigned to the technician or their teams
+    assigned_work_orders = filter_by_company(WorkOrder.query).filter(
+        (WorkOrder.assigned_technician_id == user.id) |
+        (WorkOrder.assigned_team_id.in_([team.id for team in user.teams]))
+    )
+    
+    stats = {
+        'total_equipment': filter_by_company(Equipment.query).count(),
+        'operational_equipment': filter_by_company(Equipment.query).filter_by(status='operational').count(),
+        'maintenance_equipment': filter_by_company(Equipment.query).filter_by(status='maintenance').count(),
+        'out_of_service_equipment': filter_by_company(Equipment.query).filter_by(status='out_of_service').count(),
+        'open_work_orders': assigned_work_orders.filter_by(status='open').count(),
+        'in_progress_work_orders': assigned_work_orders.filter_by(status='in_progress').count(),
+        'completed_work_orders': assigned_work_orders.filter_by(status='completed').count(),
+        'total_users': filter_by_company(User.query).count(),
+        'low_stock_items': filter_by_company(Inventory.query).filter(Inventory.current_stock <= Inventory.minimum_stock).count()
+    }
+    return stats
+
 def calculate_system_health():
     """Calculate comprehensive system health score based on multiple metrics"""
     try:
@@ -468,7 +489,12 @@ def save_uploaded_file(file, upload_dir, file_type):
 @login_required
 def index():
     """Dashboard page"""
-    stats = get_dashboard_stats()
+    # Use technician-specific stats for technicians, general stats for others
+    if current_user.role == 'technician':
+        stats = get_technician_dashboard_stats(current_user)
+    else:
+        stats = get_dashboard_stats()
+    
     if user_has_permission(current_user, 'workorder_view_all'):
         recent_work_orders = filter_by_company(WorkOrder.query).order_by(WorkOrder.created_at.desc()).limit(5).all()
     elif user_has_permission(current_user, 'workorder_view_assigned_only'):
@@ -1257,9 +1283,14 @@ def api_inventory():
     return jsonify([inv.to_dict() for inv in inventory])
 
 @app.route('/api/dashboard-stats')
+@login_required
 def api_dashboard_stats():
     """API endpoint for dashboard statistics"""
-    return jsonify(get_dashboard_stats())
+    # Use technician-specific stats for technicians, general stats for others
+    if current_user.role == 'technician':
+        return jsonify(get_technician_dashboard_stats(current_user))
+    else:
+        return jsonify(get_dashboard_stats())
 
 @app.route('/api/system-health')
 @login_required
@@ -1340,9 +1371,36 @@ def api_locations():
 @app.route('/api/calendar-events')
 @login_required
 def api_calendar_events():
-    work_orders = filter_by_company(WorkOrder.query).filter(WorkOrder.scheduled_date != None).all()
-    maints = MaintenanceSchedule.query.filter(MaintenanceSchedule.next_due != None, MaintenanceSchedule.is_active == True).all()
     events = []
+    
+    # Filter work orders based on user role
+    if current_user.role == 'technician':
+        # For technicians, show only assigned work orders
+        work_orders = filter_by_company(WorkOrder.query).filter(
+            WorkOrder.scheduled_date != None,
+            (WorkOrder.assigned_technician_id == current_user.id) |
+            (WorkOrder.assigned_team_id.in_([team.id for team in current_user.teams]))
+        ).all()
+    else:
+        # For others, show all work orders
+        work_orders = filter_by_company(WorkOrder.query).filter(WorkOrder.scheduled_date != None).all()
+    
+    # Filter maintenance schedules based on user role
+    if current_user.role == 'technician':
+        # For technicians, show only maintenance assigned to them or their teams
+        maints = MaintenanceSchedule.query.filter(
+            MaintenanceSchedule.next_due != None,
+            MaintenanceSchedule.is_active == True,
+            (MaintenanceSchedule.assigned_team_id.in_([team.id for team in current_user.teams]))
+        ).all()
+    else:
+        # For others, show all maintenance schedules
+        maints = MaintenanceSchedule.query.filter(
+            MaintenanceSchedule.next_due != None,
+            MaintenanceSchedule.is_active == True
+        ).all()
+    
+    # Add work order events
     for wo in work_orders:
         events.append({
             'id': f'wo-{wo.id}',
@@ -1350,6 +1408,8 @@ def api_calendar_events():
             'start': wo.scheduled_date.isoformat() if wo.scheduled_date else None,
             'url': url_for('work_order_detail', id=wo.id)
         })
+    
+    # Add maintenance events
     for ms in maints:
         events.append({
             'id': f'ms-{ms.id}',
@@ -1357,6 +1417,7 @@ def api_calendar_events():
             'start': ms.next_due.isoformat() if ms.next_due else None,
             'url': url_for('equipment_detail', id=ms.equipment_id)
         })
+    
     return jsonify(events)
 
 # API Routes for Mobile Media Uploads
@@ -2399,8 +2460,16 @@ def maintenance_calendar():
     year = request.args.get('year', datetime.now().year, type=int)
     month = request.args.get('month', datetime.now().month, type=int)
     
-    # Get all active maintenance schedules
-    schedules = MaintenanceSchedule.query.filter_by(is_active=True).all()
+    # Filter maintenance schedules based on user role
+    if current_user.role == 'technician':
+        # For technicians, show only maintenance assigned to them or their teams
+        schedules = MaintenanceSchedule.query.filter(
+            MaintenanceSchedule.is_active == True,
+            (MaintenanceSchedule.assigned_team_id.in_([team.id for team in current_user.teams]))
+        ).all()
+    else:
+        # For others, show all active maintenance schedules
+        schedules = MaintenanceSchedule.query.filter_by(is_active=True).all()
     
     # Generate calendar events
     calendar_events = []

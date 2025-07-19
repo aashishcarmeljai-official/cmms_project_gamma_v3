@@ -57,9 +57,19 @@
         <div>
             <h1 class="h3 mb-0">
                 <i class="fas fa-tachometer-alt text-primary me-2"></i>
-                Maintenance Dashboard
+                {% if current_user.role == 'technician' %}
+                    Technician Dashboard
+                {% else %}
+                    Maintenance Dashboard
+                {% endif %}
             </h1>
-            <p class="text-muted mb-0">Overview of your maintenance operations</p>
+            <p class="text-muted mb-0">
+                {% if current_user.role == 'technician' %}
+                    Overview of your assigned work orders and tasks
+                {% else %}
+                    Overview of your maintenance operations
+                {% endif %}
+            </p>
         </div>
     </div>
 </div>
@@ -108,9 +118,19 @@
                 <div class="row align-items-center">
                     <div class="col">
                         <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                            Open Work Orders
+                            {% if current_user.role == 'technician' %}
+                                My Work Orders
+                            {% else %}
+                                Open Work Orders
+                            {% endif %}
                         </div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.open_work_orders }}</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {% if current_user.role == 'technician' %}
+                                {{ stats.open_work_orders + stats.in_progress_work_orders + stats.completed_work_orders }}
+                            {% else %}
+                                {{ stats.open_work_orders }}
+                            {% endif %}
+                        </div>
                     </div>
                     <div class="col-auto">
                         <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
@@ -147,7 +167,12 @@
         <div class="card shadow dashboard-card mb-4">
             <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
                 <h6 class="m-0 font-weight-bold">
-                    <i class="fas fa-clipboard-list me-2"></i>Recent Work Orders
+                    <i class="fas fa-clipboard-list me-2"></i>
+                    {% if current_user.role == 'technician' %}
+                        My Recent Work Orders
+                    {% else %}
+                        Recent Work Orders
+                    {% endif %}
                 </h6>
                 <a href="/work-orders" class="btn btn-sm btn-light">
                     <i class="fas fa-plus me-1"></i>View All
@@ -209,7 +234,12 @@
         <div class="card shadow dashboard-card">
             <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
                 <h6 class="m-0 font-weight-bold">
-                    <i class="fas fa-calendar-alt me-2"></i>Maintenance Calendar
+                    <i class="fas fa-calendar-alt me-2"></i>
+                    {% if current_user.role == 'technician' %}
+                        My Maintenance Calendar
+                    {% else %}
+                        Maintenance Calendar
+                    {% endif %}
                 </h6>
                 <div>
                     <a href="/calendar" class="btn btn-sm btn-light me-2">
