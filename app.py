@@ -6003,15 +6003,14 @@ def user_can_access_work_order(work_order, user):
     )
 
 def user_has_permission(user, permission):
-    print(f"[DEBUG] user_has_permission: user.id={getattr(user, 'id', None)}, username={getattr(user, 'username', None)}, role={getattr(user, 'role', None)}, role_id={getattr(user, 'role_id', None)}, role_info={getattr(user, 'role_info', None)}")
-    if hasattr(user, 'role_info') and user.role_info and user.role_info.name == 'admin':
-        print("[DEBUG] Admin detected via role_info. Granting all permissions.")
+    # Always grant assigned-only permission to technicians
+    if getattr(user, 'role', None) == 'technician' and permission == 'workorder_view_assigned_only':
         return True
-    if hasattr(user, 'role_info') and user.role_info and user.role_info.permissions:
+    if hasattr(user, 'role_info') and user.role_info and getattr(user.role_info, 'name', None) == 'admin':
+        return True
+    if hasattr(user, 'role_info') and user.role_info and getattr(user.role_info, 'permissions', None):
         perms = json.loads(user.role_info.permissions)
-        print(f"[DEBUG] Permissions for user: {perms}")
         return permission in perms
-    print("[DEBUG] No permissions found. Denying access.")
     return False
 
 # Template context processor to make user_has_permission available in templates
