@@ -3663,6 +3663,55 @@ def admin_analytics():
             if wo.actual_end_time and wo.due_date and wo.actual_end_time <= wo.due_date:
                 priority_breakdown[wo.priority]['on_time'] += 1
     
+    # Generate chart data for Task Completion Trend
+    completion_trend_data = []
+    on_time_trend_data = []
+    trend_labels = []
+    
+    # Generate weekly data for the selected period
+    weeks = int(period) // 7
+    if weeks == 0:
+        weeks = 1
+    
+    for week in range(weeks):
+        week_start = start_date + timedelta(days=week * 7)
+        week_end = min(week_start + timedelta(days=7), end_date)
+        
+        week_work_orders = [wo for wo in work_orders if week_start <= wo.created_at < week_end]
+        week_completed = [wo for wo in week_work_orders if wo.status == 'completed']
+        week_on_time = [wo for wo in week_completed if wo.actual_end_time and wo.due_date and wo.actual_end_time <= wo.due_date]
+        
+        completion_rate_week = (len(week_completed) / len(week_work_orders) * 100) if week_work_orders else 0
+        on_time_rate_week = (len(week_on_time) / len(week_completed) * 100) if week_completed else 0
+        
+        completion_trend_data.append(round(completion_rate_week, 1))
+        on_time_trend_data.append(round(on_time_rate_week, 1))
+        trend_labels.append(f"Week {week + 1}")
+    
+    # Generate chart data for User Activity
+    user_activity_data = []
+    user_activity_labels = []
+    
+    # Get user activity for the last 7 days
+    for i in range(7):
+        day = end_date - timedelta(days=i)
+        day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+        
+        # Count users who logged in on this day
+        active_users_count = filter_by_company(User.query).filter(
+            User.last_login >= day_start,
+            User.last_login <= day_end
+        ).count()
+        
+        user_activity_data.insert(0, active_users_count)
+        user_activity_labels.insert(0, day.strftime('%a'))
+    
+    # Get active users count for the period
+    active_users = filter_by_company(User.query).filter(
+        User.last_login >= start_date
+    ).count()
+    
     return render_template('admin/analytics.html',
                          period=period,
                          total_tasks=total_tasks,
@@ -3672,7 +3721,13 @@ def admin_analytics():
                          on_time_rate=on_time_rate,
                          equipment_performance=equipment_performance,
                          technician_performance=technician_performance,
-                         priority_breakdown=priority_breakdown)
+                         priority_breakdown=priority_breakdown,
+                         completion_trend_data=completion_trend_data,
+                         on_time_trend_data=on_time_trend_data,
+                         trend_labels=trend_labels,
+                         user_activity_data=user_activity_data,
+                         user_activity_labels=user_activity_labels,
+                         active_users=active_users)
 
 @app.route('/admin/users')
 @login_required

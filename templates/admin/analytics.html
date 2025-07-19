@@ -366,67 +366,90 @@
 <script>
     // Task Completion Trend Chart
     const completionTrendCtx = document.getElementById('completionTrendChart').getContext('2d');
-    new Chart(completionTrendCtx, {
-        type: 'line',
-        data: {
-            labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-            datasets: [{
-                label: 'Completion Rate',
-                data: [85, 88, 92, 90],
-                borderColor: '#007bff',
-                backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                tension: 0.4
-            }, {
-                label: 'On-Time Rate',
-                data: [78, 82, 85, 83],
-                borderColor: '#28a745',
-                backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top'
-                }
+    const trendLabels = {{ trend_labels|tojson|safe }} || [];
+    const completionTrendData = {{ completion_trend_data|tojson|safe }} || [];
+    const onTimeTrendData = {{ on_time_trend_data|tojson|safe }} || [];
+    
+    if (trendLabels.length > 0 && completionTrendData.length > 0) {
+        new Chart(completionTrendCtx, {
+            type: 'line',
+            data: {
+                labels: trendLabels,
+                datasets: [{
+                    label: 'Completion Rate',
+                    data: completionTrendData,
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'On-Time Rate',
+                    data: onTimeTrendData,
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    tension: 0.4
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
                 }
             }
-        }
-    });
+        });
+    } else {
+        // Show no data message
+        completionTrendCtx.font = '16px Arial';
+        completionTrendCtx.fillStyle = '#666';
+        completionTrendCtx.textAlign = 'center';
+        completionTrendCtx.fillText('No data available for selected period', completionTrendCtx.canvas.width / 2, completionTrendCtx.canvas.height / 2);
+    }
 
     // User Activity Chart
     const userActivityCtx = document.getElementById('userActivityChart').getContext('2d');
-    new Chart(userActivityCtx, {
-        type: 'bar',
-        data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-            datasets: [{
-                label: 'Active Users',
-                data: [12, 15, 18, 14, 16, 8, 6],
-                backgroundColor: 'rgba(0, 123, 255, 0.8)'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top'
-                }
+    const userActivityLabels = {{ user_activity_labels|tojson|safe }} || [];
+    const userActivityData = {{ user_activity_data|tojson|safe }} || [];
+    
+    if (userActivityLabels.length > 0 && userActivityData.length > 0) {
+        new Chart(userActivityCtx, {
+            type: 'bar',
+            data: {
+                labels: userActivityLabels,
+                datasets: [{
+                    label: 'Active Users',
+                    data: userActivityData,
+                    backgroundColor: 'rgba(0, 123, 255, 0.8)'
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
                 }
             }
-        }
-    });
+        });
+    } else {
+        // Show no data message
+        userActivityCtx.font = '16px Arial';
+        userActivityCtx.fillStyle = '#666';
+        userActivityCtx.textAlign = 'center';
+        userActivityCtx.fillText('No user activity data available', userActivityCtx.canvas.width / 2, userActivityCtx.canvas.height / 2);
+    }
 </script>
 {% endblock %} 
