@@ -72,6 +72,61 @@
             padding: 20px;
             margin: 20px 0;
         }
+        @media print {
+            html, body {
+                width: 210mm;
+                height: 297mm;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: white !important;
+                font-size: 12px !important;
+            }
+            .qr-container {
+                max-width: 100vw !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .qr-card {
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .qr-header {
+                padding: 16px !important;
+                font-size: 1.2em !important;
+            }
+            .qr-body {
+                padding: 16px !important;
+            }
+            .qr-code-container, .equipment-info, .download-section, .qr-instructions {
+                margin: 8px 0 !important;
+                padding: 10px !important;
+                border-radius: 6px !important;
+            }
+            #qrCode {
+                margin: 8px auto !important;
+                padding: 8px !important;
+                max-width: 220px !important;
+            }
+            .btn-download, .btn-secondary, .btn-primary, .breadcrumb, nav, .download-section, .text-center.mt-4 {
+                display: none !important;
+            }
+            .qr-instructions {
+                font-size: 11px !important;
+            }
+            * {
+                box-sizing: border-box !important;
+            }
+            @page {
+                size: A4 portrait;
+                margin: 10mm;
+            }
+            .qr-header, .qr-card, .qr-container, .qr-body, .equipment-info, .qr-code-container {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
     </style>
 {% endblock %}
 
@@ -148,9 +203,16 @@
                         <button class="btn btn-download me-2" onclick="downloadCompositeQR()">
                             <i class="fas fa-download me-2"></i>Download PNG
                         </button>
-                        <button class="btn btn-download" onclick="copyURL(event)">
+                        <button class="btn btn-download me-2" onclick="copyURL(event)">
                             <i class="fas fa-copy me-2"></i>Copy URL
                         </button>
+                        <button class="btn btn-download" onclick="window.print()">
+                            <i class="fas fa-print me-2"></i>Print the Page
+                        </button>
+                    </div>
+                    <div class="text-center text-muted small mb-2 d-print-none" style="margin-top: 4px;">
+                        <i class="fas fa-info-circle me-1"></i>
+                        For best results, enable <b>Print Background Graphics</b> in your print dialog.
                     </div>
                 </div>
 

@@ -2,6 +2,15 @@
 
 {% block title %}Admin Dashboard - CMMS{% endblock %}
 
+<style>
+    .dashboard-card-link {
+        text-decoration: none;
+        color: inherit;
+        cursor: pointer;
+        display: block;
+    }
+</style>
+
 {% block content %}
 <div class="container-fluid">
     <!-- Page Header -->
@@ -23,6 +32,7 @@
     <!-- System Overview Cards -->
     <div class="row mb-4">
         <div class="col-xl-3 col-md-6 mb-4">
+            <a href="{{ url_for('admin_users') }}" class="dashboard-card-link">
             <div class="card border-left-primary shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -38,9 +48,11 @@
                     </div>
                 </div>
             </div>
+            </a>
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
+            <a href="{{ url_for('admin_work_orders') }}" class="dashboard-card-link">
             <div class="card border-left-success shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -56,9 +68,11 @@
                     </div>
                 </div>
             </div>
+            </a>
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
+            <a href="{{ url_for('admin_asset_management') }}" class="dashboard-card-link">
             <div class="card border-left-info shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -74,9 +88,11 @@
                     </div>
                 </div>
             </div>
+            </a>
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
+            <a href="{{ url_for('admin_analytics') }}" class="dashboard-card-link">
             <div class="card border-left-{{ 'success' if system_health_data.status == 'healthy' else 'warning' if system_health_data.status == 'warning' else 'danger' }} shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -93,6 +109,7 @@
                     </div>
                 </div>
             </div>
+            </a>
         </div>
     </div>
 
