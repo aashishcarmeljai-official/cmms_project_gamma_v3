@@ -106,6 +106,9 @@ def create_default_roles_for_company(company_id):
             'description': 'Standard technician access for maintenance tasks',
             'permissions': [
                 'equipment_view',
+                'inventory_view',
+                'location_view',
+                'inventory_add',
                 'workorder_view', 'workorder_edit',
                 'user_view'
             ],

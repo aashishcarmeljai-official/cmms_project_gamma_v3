@@ -76,8 +76,6 @@
         .offcanvas-admin {
             background: linear-gradient(135deg, #0d6efd 0%, #2563eb 100%);
             color: #fff;
-            border-top-right-radius: 1.25rem;
-            border-bottom-right-radius: 1.25rem;
             overflow: hidden;
         }
         .offcanvas-admin .offcanvas-title {
@@ -125,6 +123,15 @@
             border-top: 1px solid #e3f2fd;
             margin: 0.5rem 0;
         }
+        .offcanvas-admin .sidebar-scrollable {
+            overflow-y: auto;
+            min-height: 0;
+            max-height: calc(100vh - 220px);
+            scrollbar-width: none; /* Firefox */
+        }
+        .offcanvas-admin .sidebar-scrollable::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -138,95 +145,137 @@
     </div>
 
     {% set minimal_navbar = request.endpoint in ['login', 'signup'] %}
+    {% if minimal_navbar %}
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container-fluid">
             <a class="navbar-brand me-3" href="/">
                 <i class="fas fa-tools me-2"></i>Maintain Desk
             </a>
-            {% if minimal_navbar %}
-                <div class="d-flex ms-auto">
-                    <div class="nav-item">
-                        <a class="nav-link text-white" href="{{ url_for('login') }}">Sign In</a>
-                    </div>
-                    <div class="nav-item ms-3">
-                        <a class="nav-link text-white" href="{{ url_for('signup') }}">Sign Up</a>
-                    </div>
+            <div class="d-flex ms-auto">
+                <div class="nav-item">
+                    <a class="nav-link text-white" href="{{ url_for('login') }}">Sign In</a>
                 </div>
-            {% else %}
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">Dashboard</a>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="assetsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Assets
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="assetsDropdown">
-                            <li><a class="dropdown-item" href="/equipment"><i class="fas fa-cogs me-2"></i>Equipment</a></li>
-                            <li><a class="dropdown-item" href="/inventory"><i class="fas fa-boxes me-2"></i>Inventory</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/work-orders">Work Orders</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/sops">SOPs</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/calendar">Calendar</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/teams">Teams</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/vendors">Vendors</a>
-                    </li>
-                    {% if current_user.is_authenticated and current_user.role in ['admin', 'manager'] %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/quick-asset-registry">Quick Asset Registry</a>
-                    </li>
-                    {% endif %}
-                </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/health">Health</a>
-                    </li>
-                    {% if current_user.is_authenticated %}
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-user me-1"></i>{{ current_user.first_name or current_user.username }}
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                                <li><a class="dropdown-item" href="{{ url_for('profile') }}"><i class="fas fa-user-circle me-2"></i>Profile</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('whatsapp_settings') }}"><i class="fab fa-whatsapp me-2"></i>WhatsApp Settings</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
-                            </ul>
-                        </li>
-                        {% if current_user.role in ['admin', 'manager'] %}
-                        <li class="nav-item">
-                            <button class="btn btn-outline-light ms-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#adminSidebar" aria-controls="adminSidebar">
-                                <i class="fas fa-cog me-1"></i>Admin
-                            </button>
-                        </li>
-                        {% endif %}
-                    {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('login') }}">Login</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('signup') }}">Sign Up</a>
-                        </li>
-                    {% endif %}
-                </ul>
+                <div class="nav-item ms-3">
+                    <a class="nav-link text-white" href="{{ url_for('signup') }}">Sign Up</a>
+                </div>
             </div>
-            {% endif %}
         </div>
     </nav>
+    {% endif %}
+
+    {% if not minimal_navbar and current_user.is_authenticated %}
+        {% if current_user.role in ['admin', 'manager'] %}
+            <!-- Admin/Manager Sidebar -->
+            <div class="fixed-sidebar offcanvas-admin d-flex flex-column" style="position:fixed;top:0;left:0;height:100vh;width:260px;z-index:1040;box-shadow:2px 0 8px rgba(0,0,0,0.07);border-radius:0;">
+                <div class="offcanvas-header" style="background:linear-gradient(135deg,#0d6efd 0%,#2563eb 100%);padding:1.2rem 1rem 1rem 1rem;">
+                    <h5 class="offcanvas-title" id="adminSidebarLabel"><i class="fas fa-tools me-2"></i>Maintain Desk</h5>
+                </div>
+                <div class="flex-grow-1 d-flex flex-column justify-content-between" style="min-height:0;">
+                    <div class="sidebar-scrollable" style="overflow-y:auto;min-height:0;max-height:calc(100vh - 220px);">
+                        <div class="section-header">Core Management</div>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><a href="{{ url_for('admin_dashboard') }}"><i class="fas fa-tachometer-alt"></i>Admin Dashboard</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('admin_users') }}"><i class="fas fa-users"></i>User Management</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('admin_teams') }}"><i class="fas fa-user-friends"></i>Team Management</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('admin_roles') }}"><i class="fas fa-user-shield"></i>Role Management</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('admin_departments') }}"><i class="fas fa-building"></i>Departments</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('admin_asset_management') }}"><i class="fas fa-cogs"></i>Asset Management</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('categories_list') }}"><i class="fas fa-tags"></i>Categories</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('admin_work_orders') }}"><i class="fas fa-clipboard-list"></i>Work Order Management</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('admin_technicians') }}"><i class="fas fa-user-cog"></i>Technician Performance</a></li>
+                            <li class="list-group-item"><a href="/locations"><i class="fas fa-map-marker-alt"></i>Locations</a></li>
+                            <li class="list-group-item"><a href="/vendors"><i class="fas fa-briefcase"></i>Vendors</a></li>
+                        </ul>
+                        <div class="section-header">Analytics & Reports</div>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><a href="{{ url_for('admin_analytics') }}"><i class="fas fa-chart-line"></i>Analytics</a></li>
+                            <li class="list-group-item"><a href="/reports"><i class="fas fa-chart-bar"></i>Reports</a></li>
+                        </ul>
+                        <hr class="dropdown-divider">
+                        <div class="section-header">System & Notifications</div>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><a href="{{ url_for('whatsapp_emergency') }}"><i class="fab fa-whatsapp"></i>Emergency Broadcast</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('whatsapp_notifications') }}"><i class="fas fa-bell"></i>Notification Logs</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('admin_settings') }}"><i class="fas fa-cogs"></i>System Settings</a></li>
+                        </ul>
+                    </div>
+                    <div class="sidebar-user-section mt-2" style="border-top:1px solid #e3f2fd;padding-top:0.5rem;background:rgba(255,255,255,0.03);">
+                        <div class="section-header">User</div>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><a href="{{ url_for('profile') }}"><i class="fas fa-user-circle"></i>Profile</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('whatsapp_settings') }}"><i class="fab fa-whatsapp"></i>WhatsApp Settings</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i>Logout</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <style>
+                body {
+                    padding-left: 260px !important;
+                }
+                @media (max-width: 991.98px) {
+                    .fixed-sidebar {
+                        display: none !important;
+                    }
+                    body {
+                        padding-left: 0 !important;
+                    }
+                }
+                main.container-fluid {
+                    max-width: 100vw;
+                }
+            </style>
+        {% else %}
+            <!-- Regular User Sidebar -->
+            <div class="fixed-sidebar offcanvas-admin d-flex flex-column" style="position:fixed;top:0;left:0;height:100vh;width:260px;z-index:1040;box-shadow:2px 0 8px rgba(0,0,0,0.07);border-radius:0;">
+                <div class="offcanvas-header" style="background:linear-gradient(135deg,#0d6efd 0%,#2563eb 100%);padding:1.2rem 1rem 1rem 1rem;">
+                    <h5 class="offcanvas-title"><i class="fas fa-tools me-2"></i>Maintain Desk</h5>
+                </div>
+                <div class="flex-grow-1 d-flex flex-column justify-content-between" style="min-height:0;">
+                    <div class="sidebar-scrollable" style="overflow-y:auto;min-height:0;max-height:calc(100vh - 220px);">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><a href="/"><i class="fas fa-tachometer-alt"></i>Dashboard</a></li>
+                            <li class="list-group-item"><a href="/equipment"><i class="fas fa-cogs"></i>Equipment</a></li>
+                            <li class="list-group-item"><a href="/inventory"><i class="fas fa-boxes"></i>Inventory</a></li>
+                            <li class="list-group-item"><a href="/work-orders"><i class="fas fa-clipboard-list"></i>Work Orders</a></li>
+                            <li class="list-group-item"><a href="/sops"><i class="fas fa-book"></i>SOPs</a></li>
+                            <li class="list-group-item"><a href="/calendar"><i class="fas fa-calendar-alt"></i>Calendar</a></li>
+                            <li class="list-group-item"><a href="/teams"><i class="fas fa-users"></i>Teams</a></li>
+                            <li class="list-group-item"><a href="/vendors"><i class="fas fa-briefcase"></i>Vendors</a></li>
+                            {% if current_user.role == 'manager' %}
+                            <li class="list-group-item"><a href="/quick-asset-registry"><i class="fas fa-bolt"></i>Quick Asset Registry</a></li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    <div class="sidebar-user-section mt-2" style="border-top:1px solid #e3f2fd;padding-top:0.5rem;background:rgba(255,255,255,0.03);">
+                        <div class="section-header">User</div>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><a href="{{ url_for('profile') }}"><i class="fas fa-user-circle"></i>Profile</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('whatsapp_settings') }}"><i class="fab fa-whatsapp"></i>WhatsApp Settings</a></li>
+                            <li class="list-group-item"><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i>Logout</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <style>
+                body {
+                    padding-left: 260px !important;
+                }
+                @media (max-width: 991.98px) {
+                    .fixed-sidebar {
+                        display: none !important;
+                    }
+                    body {
+                        padding-left: 0 !important;
+                    }
+                }
+                main.container-fluid {
+                    max-width: 100vw;
+                }
+            </style>
+        {% endif %}
+    {% endif %}
+
     <main class="container-fluid mt-4">
         <!-- Flash Messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -282,42 +331,5 @@
         });
     </script>
     {% block scripts %}{% endblock %}
-    {% if current_user.is_authenticated and current_user.role in ['admin', 'manager'] %}
-    <div class="offcanvas offcanvas-start offcanvas-admin" tabindex="-1" id="adminSidebar" aria-labelledby="adminSidebarLabel">
-        <div class="offcanvas-header">
-            <h5 class="offcanvas-title" id="adminSidebarLabel"><i class="fas fa-cog me-2"></i>Admin Menu</h5>
-            <button type="button" class="btn-close btn-close-white text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-        </div>
-        <div class="offcanvas-body p-0">
-            <div class="section-header">Core Management</div>
-            <ul class="list-group list-group-flush">
-                <li class="list-group-item"><a href="{{ url_for('admin_dashboard') }}"><i class="fas fa-tachometer-alt"></i>Admin Dashboard</a></li>
-                <li class="list-group-item"><a href="{{ url_for('admin_users') }}"><i class="fas fa-users"></i>User Management</a></li>
-                <li class="list-group-item"><a href="{{ url_for('admin_teams') }}"><i class="fas fa-user-friends"></i>Team Management</a></li>
-                <li class="list-group-item"><a href="{{ url_for('admin_roles') }}"><i class="fas fa-user-shield"></i>Role Management</a></li>
-                <li class="list-group-item"><a href="{{ url_for('admin_departments') }}"><i class="fas fa-building"></i>Departments</a></li>
-                
-                <li class="list-group-item"><a href="{{ url_for('admin_asset_management') }}"><i class="fas fa-cogs"></i>Asset Management</a></li>
-                <li class="list-group-item"><a href="{{ url_for('categories_list') }}"><i class="fas fa-tags"></i>Categories</a></li>
-                <li class="list-group-item"><a href="{{ url_for('admin_work_orders') }}"><i class="fas fa-clipboard-list"></i>Work Order Management</a></li>
-                <li class="list-group-item"><a href="{{ url_for('admin_technicians') }}"><i class="fas fa-user-cog"></i>Technician Performance</a></li>
-                <li class="list-group-item"><a href="/locations"><i class="fas fa-map-marker-alt"></i>Locations</a></li>
-                <li class="list-group-item"><a href="/vendors"><i class="fas fa-briefcase"></i>Vendors</a></li>
-            </ul>
-            <div class="section-header">Analytics & Reports</div>
-            <ul class="list-group list-group-flush">
-                <li class="list-group-item"><a href="{{ url_for('admin_analytics') }}"><i class="fas fa-chart-line"></i>Analytics</a></li>
-                <li class="list-group-item"><a href="/reports"><i class="fas fa-chart-bar"></i>Reports</a></li>
-            </ul>
-            <hr class="dropdown-divider">
-            <div class="section-header">System & Notifications</div>
-            <ul class="list-group list-group-flush">
-                <li class="list-group-item"><a href="{{ url_for('whatsapp_emergency') }}"><i class="fab fa-whatsapp"></i>Emergency Broadcast</a></li>
-                <li class="list-group-item"><a href="{{ url_for('whatsapp_notifications') }}"><i class="fas fa-bell"></i>Notification Logs</a></li>
-                <li class="list-group-item"><a href="{{ url_for('admin_settings') }}"><i class="fas fa-cogs"></i>System Settings</a></li>
-            </ul>
-        </div>
-    </div>
-    {% endif %}
 </body>
 </html> 
