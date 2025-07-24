@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}My Work Order Requests{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2>My Work Order Requests</h2>
+    {% if requests %}
+    <table class="table table-bordered table-hover mt-3">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Description</th>
+                <th>Equipment</th>
+                <th>Priority</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Submitted</th>
+                <th>Rejection Reason</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for req in requests %}
+            <tr>
+                <td>{{ req.title }}</td>
+                <td>{{ req.description }}</td>
+                <td>{{ req.equipment.name if req.equipment else 'N/A' }}</td>
+                <td>{{ req.priority|capitalize }}</td>
+                <td>{{ req.type|capitalize }}</td>
+                <td>
+                    {% if req.status == 'pending' %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                    {% elif req.status == 'approved' %}
+                        <span class="badge bg-success">Approved</span>
+                    {% elif req.status == 'rejected' %}
+                        <span class="badge bg-danger">Rejected</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{{ req.status|capitalize }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ req.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{% if req.status == 'rejected' %}{{ req.rejection_reason or 'N/A' }}{% else %}-{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-info mt-4">You have not submitted any work order requests.</div>
+    {% endif %}
+</div>
+{% endblock %} 

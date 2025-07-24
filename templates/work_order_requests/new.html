@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}Submit Work Order Request{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Submit Work Order Request</h2>
+    <form method="POST">
+        <div class="mb-3">
+            <label for="title" class="form-label">Title *</label>
+            <input type="text" class="form-control" id="title" name="title" required>
+        </div>
+        <div class="mb-3">
+            <label for="description" class="form-label">Description *</label>
+            <textarea class="form-control" id="description" name="description" rows="4" required></textarea>
+        </div>
+        <div class="mb-3">
+            <label for="equipment_id" class="form-label">Equipment *</label>
+            <select class="form-select" id="equipment_id" name="equipment_id" required>
+                <option value="">-- Select Equipment --</option>
+                {% for eq in equipment %}
+                <option value="{{ eq.id }}">{{ eq.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-3">
+            <label for="location_id" class="form-label">Location</label>
+            <select class="form-select" id="location_id" name="location_id">
+                <option value="">-- Select Location --</option>
+                {% for loc in locations %}
+                <option value="{{ loc.id }}">{{ loc.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-3">
+            <label for="priority" class="form-label">Priority</label>
+            <select class="form-select" id="priority" name="priority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label for="type" class="form-label">Type</label>
+            <select class="form-select" id="type" name="type">
+                <option value="corrective" selected>Corrective</option>
+                <option value="preventive">Preventive</option>
+                <option value="emergency">Emergency</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Submit Request</button>
+    </form>
+</div>
+{% endblock %} 

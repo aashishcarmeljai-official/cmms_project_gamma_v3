@@ -32,6 +32,24 @@
         color: white;
     }
 </style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function enforceSingleSpecialPrivilege(modalId) {
+        const adminCheckbox = document.querySelector(`#${modalId} input#special_admin_privileges`);
+        const managerCheckbox = document.querySelector(`#${modalId} input#special_manager_privileges`);
+        if (adminCheckbox && managerCheckbox) {
+            adminCheckbox.addEventListener('change', function() {
+                if (this.checked) managerCheckbox.checked = false;
+            });
+            managerCheckbox.addEventListener('change', function() {
+                if (this.checked) adminCheckbox.checked = false;
+            });
+        }
+    }
+    enforceSingleSpecialPrivilege('createRoleModal');
+    enforceSingleSpecialPrivilege('editRoleModal');
+});
+</script>
 {% endblock %}
 
 {% block content %}
@@ -390,6 +408,24 @@
                                   placeholder="Describe the role's responsibilities and access level"></textarea>
                     </div>
                     
+                    <div class="mb-3">
+                        <label class="form-label">Special Privileges</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="special_privileges" value="admin" id="special_admin_privileges">
+                            <label class="form-check-label fw-bold text-danger" for="special_admin_privileges">
+                                Admin Privileges (Full system access)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="special_privileges" value="manager" id="special_manager_privileges">
+                            <label class="form-check-label fw-bold text-warning" for="special_manager_privileges">
+                                Manager Privileges (Management and oversight access)
+                            </label>
+                        </div>
+                        <div class="form-text text-muted">
+                            <strong>Note:</strong> Only one of these should be selected per role. These grant broad system access and override individual permissions below.
+                        </div>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">Permissions</label>
                         <div class="row">

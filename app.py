@@ -863,73 +863,74 @@ def work_orders_list():
 @app.route('/work-orders/new', methods=['GET', 'POST'])
 @login_required
 def work_order_new():
-    """Create new work order"""
+    from models import WorkOrder, WorkOrderRequest, Equipment, Location, Team, User
     if request.method == 'POST':
         data = request.form
-        # Only process files after form validation
         form_valid = all([
             data.get('title'),
             data.get('description'),
             data.get('equipment_id')
         ])
-        # Add more required fields as needed
         if form_valid:
-            # Handle image uploads
-            images = []
-            if 'images' in request.files:
-                uploaded_files = request.files.getlist('images')
-                static_folder = app.static_folder or ''
-                for file in uploaded_files:
-                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'image')
-                    if file_path:
-                        images.append(file_path)
-            # Handle video uploads
-            videos = []
-            if 'videos' in request.files:
-                uploaded_files = request.files.getlist('videos')
-                static_folder = app.static_folder or ''
-                for file in uploaded_files:
-                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'video')
-                    if file_path:
-                        videos.append(file_path)
-            # Handle voice note uploads
-            voice_notes = []
-            if 'voice_notes' in request.files:
-                uploaded_files = request.files.getlist('voice_notes')
-                static_folder = app.static_folder or ''
-                for file in uploaded_files:
-                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'audio')
-                    if file_path:
-                        voice_notes.append(file_path)
-            work_order = WorkOrder(
-                company_id=current_user.company_id,
-                work_order_number=generate_work_order_number(),
-                title=data['title'],
-                description=data['description'],
-                priority=data.get('priority', 'medium'),
-                type=data.get('type', 'corrective'),
-                equipment_id=data['equipment_id'],
-                location_id=data.get('location_id') if data.get('location_id') else None,
-                assigned_technician_id=data.get('assigned_technician_id') if data.get('assigned_technician_id') else None,
-                assigned_team_id=data.get('assigned_team_id') if data.get('assigned_team_id') else None,
-                created_by_id=current_user.id,
-                estimated_duration=data.get('estimated_duration'),
-                scheduled_date=datetime.strptime(data['scheduled_date'], '%Y-%m-%dT%H:%M') if data.get('scheduled_date') else None,
-                due_date=datetime.strptime(data['due_date'], '%Y-%m-%dT%H:%M') if data.get('due_date') else None,
-                images=','.join(images) if images else None,
-                videos=','.join(videos) if videos else None,
-                voice_notes=','.join(voice_notes) if voice_notes else None
-            )
-            db.session.add(work_order)
-            db.session.commit()
-            flash('Work order created successfully!', 'success')
-            return redirect(url_for('work_orders_list'))
+            if current_user.role not in ['admin', 'manager']:
+                # Save as WorkOrderRequest
+                work_order_request = WorkOrderRequest(
+                    company_id=current_user.company_id,
+                    title=data['title'],
+                    description=data['description'],
+                    priority=data.get('priority', 'medium'),
+                    type=data.get('type', 'corrective'),
+                    equipment_id=data['equipment_id'],
+                    location_id=data.get('location_id') if data.get('location_id') else None,
+                    requested_by_id=current_user.id,
+                    status='pending'
+                )
+                db.session.add(work_order_request)
+                db.session.commit()
+                # Notify admins/managers by email
+                admin_manager_users = User.query.filter(
+                    User.company_id == current_user.company_id,
+                    User.role.in_(['admin', 'manager']),
+                    User.is_active == True
+                ).all()
+                if admin_manager_users:
+                    recipients = [u.email for u in admin_manager_users if u.email]
+                    subject = 'New Work Order Request Submitted'
+                    approval_link = url_for('admin_work_order_approvals', _external=True)
+                    body = (
+                        f"A new work order request has been submitted by {current_user.first_name} {current_user.last_name}.\n\n"
+                        f"Title: {data['title']}\n"
+                        f"Description: {data['description']}\n"
+                        f"Priority: {data.get('priority', 'medium')}\n\n"
+                        f"Please review and approve/reject this request in the admin dashboard:\n{approval_link}"
+                    )
+                    send_email(subject, recipients, body)
+                flash('Work order request submitted for approval!', 'success')
+                return redirect(url_for('my_work_order_requests'))
+            else:
+                # Admin/manager: create WorkOrder directly
+                work_order = WorkOrder(
+                    company_id=current_user.company_id,
+                    work_order_number=generate_work_order_number(),
+                    title=data['title'],
+                    description=data['description'],
+                    priority=data.get('priority', 'medium'),
+                    type=data.get('type', 'corrective'),
+                    equipment_id=data['equipment_id'],
+                    location_id=data.get('location_id') if data.get('location_id') else None,
+                    created_by_id=current_user.id,
+                    status='open'
+                )
+                db.session.add(work_order)
+                db.session.commit()
+                flash('Work order created successfully!', 'success')
+                return redirect(url_for('work_orders_list'))
         else:
             flash('Please fill all required fields.', 'error')
-    equipment = filter_by_company(Equipment.query).all()
-    technicians = filter_by_company(User.query).filter_by(role='technician').all()
-    teams = filter_by_company(Team.query).all()
-    locations = filter_by_company(Location.query).all()
+    equipment = Equipment.query.filter_by(company_id=current_user.company_id).all()
+    technicians = User.query.filter_by(company_id=current_user.company_id, role='technician').all()
+    teams = Team.query.filter_by(company_id=current_user.company_id).all()
+    locations = Location.query.filter_by(company_id=current_user.company_id).all()
     return render_template('work_orders/new.html', equipment=equipment, technicians=technicians, teams=teams, locations=locations)
 
 @app.route('/work-orders/<int:id>')
@@ -4224,6 +4225,27 @@ def admin_create_role():
         display_name = request.form.get('display_name', '').strip()
         description = request.form.get('description', '').strip()
         permissions = request.form.getlist('permissions')
+        special_privileges = request.form.getlist('special_privileges')
+
+        # Handle special privileges
+        admin_permissions = [
+            'equipment_view', 'equipment_create', 'equipment_edit', 'equipment_delete',
+            'workorder_view', 'workorder_create', 'workorder_edit', 'workorder_delete',
+            'user_view', 'user_create', 'user_edit', 'user_delete',
+            'admin_dashboard', 'role_manage', 'system_settings', 'reports_access',
+            'team_manage', 'location_manage', 'inventory_manage', 'sop_manage'
+        ]
+        manager_permissions = [
+            'equipment_view', 'equipment_create', 'equipment_edit',
+            'workorder_view', 'workorder_create', 'workorder_edit',
+            'user_view', 'user_create', 'user_edit',
+            'admin_dashboard', 'reports_access', 'team_manage',
+            'location_manage', 'inventory_manage', 'sop_manage'
+        ]
+        if 'admin' in special_privileges:
+            permissions = admin_permissions
+        elif 'manager' in special_privileges:
+            permissions = manager_permissions
         
         # Validation
         if not name or not display_name:
@@ -4255,6 +4277,139 @@ def admin_create_role():
         db.session.rollback()
         flash(f'Error creating role: {str(e)}', 'error')
         return redirect(url_for('admin_roles'))
+
+@app.route('/work-order-requests/new', methods=['GET', 'POST'])
+@login_required
+def work_order_request_new():
+    # Only allow non-admin/manager users
+    if current_user.role in ['admin', 'manager']:
+        flash('Admins and managers cannot submit work order requests.', 'error')
+        return redirect(url_for('index'))
+
+    from models import Equipment, Location, WorkOrderRequest
+    if request.method == 'POST':
+        data = request.form
+        form_valid = all([
+            data.get('title'),
+            data.get('description'),
+            data.get('equipment_id')
+        ])
+        if form_valid:
+            work_order_request = WorkOrderRequest(
+                company_id=current_user.company_id,
+                title=data['title'],
+                description=data['description'],
+                priority=data.get('priority', 'medium'),
+                type=data.get('type', 'corrective'),
+                equipment_id=data['equipment_id'],
+                location_id=data.get('location_id') if data.get('location_id') else None,
+                requested_by_id=current_user.id,
+                status='pending'
+            )
+            db.session.add(work_order_request)
+            db.session.commit()
+            flash('Work order request submitted for approval!', 'success')
+            # Notify admins/managers by email
+            admin_manager_users = User.query.filter(
+                User.company_id == current_user.company_id,
+                User.role.in_(['admin', 'manager']),
+                User.is_active == True
+            ).all()
+            if admin_manager_users:
+                recipients = [u.email for u in admin_manager_users if u.email]
+                subject = 'New Work Order Request Submitted'
+                body = (
+                    f"A new work order request has been submitted by {current_user.first_name} {current_user.last_name}.\n\n"
+                    f"Title: {data['title']}\n"
+                    f"Description: {data['description']}\n"
+                    f"Priority: {data.get('priority', 'medium')}\n\n"
+                    "Please review and approve/reject this request in the admin dashboard."
+                )
+                # TODO: Add direct link to approval dashboard when implemented
+                send_email(subject, recipients, body)
+            return redirect(url_for('my_work_order_requests'))
+        else:
+            flash('Please fill all required fields.', 'error')
+    equipment = Equipment.query.filter_by(company_id=current_user.company_id).all()
+    locations = Location.query.filter_by(company_id=current_user.company_id).all()
+    return render_template('work_order_requests/new.html', equipment=equipment, locations=locations)
+
+@app.route('/admin/work-order-approvals')
+@login_required
+def admin_work_order_approvals():
+    if current_user.role not in ['admin', 'manager']:
+        flash('Access denied. Admin/Manager privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+    from models import WorkOrderRequest, User, Equipment, Location
+    pending_requests = WorkOrderRequest.query.filter_by(
+        company_id=current_user.company_id, status='pending'
+    ).order_by(WorkOrderRequest.created_at.desc()).all()
+    return render_template('admin/work_order_approvals.html', requests=pending_requests)
+
+@app.route('/my-work-order-requests')
+@login_required
+def my_work_order_requests():
+    from models import WorkOrderRequest, Equipment, Location
+    requests = WorkOrderRequest.query.filter_by(requested_by_id=current_user.id).order_by(WorkOrderRequest.created_at.desc()).all()
+    return render_template('work_order_requests/my_requests.html', requests=requests)
+
+@app.route('/admin/work-order-approvals/<int:request_id>/approve', methods=['POST'])
+@login_required
+def approve_work_order_request(request_id):
+    if current_user.role not in ['admin', 'manager']:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+    from models import WorkOrderRequest, WorkOrder, User, Equipment, Location
+    req = WorkOrderRequest.query.get_or_404(request_id)
+    if req.company_id != current_user.company_id or req.status != 'pending':
+        return jsonify({'success': False, 'message': 'Invalid request'}), 400
+    # Create WorkOrder from request
+    work_order = WorkOrder(
+        company_id=req.company_id,
+        work_order_number=generate_work_order_number(),
+        title=req.title,
+        description=req.description,
+        priority=req.priority,
+        type=req.type,
+        equipment_id=req.equipment_id,
+        location_id=req.location_id,
+        created_by_id=req.requested_by_id,
+        status='open'
+    )
+    db.session.add(work_order)
+    req.status = 'approved'
+    db.session.commit()
+    # Assign a technician (for now, assign first available technician)
+    technician = User.query.filter_by(company_id=req.company_id, role='technician', is_active=True).first()
+    if technician:
+        work_order.assigned_technician_id = technician.id
+        db.session.commit()
+        # Notify technician by email
+        if technician.email:
+            subject = 'New Work Order Assigned'
+            body = f"You have been assigned a new work order.\n\nTitle: {work_order.title}\nDescription: {work_order.description}"
+            send_email(subject, [technician.email], body)
+    return jsonify({'success': True, 'message': 'Request approved and work order created.'})
+
+@app.route('/admin/work-order-approvals/<int:request_id>/reject', methods=['POST'])
+@login_required
+def reject_work_order_request(request_id):
+    if current_user.role not in ['admin', 'manager']:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+    from models import WorkOrderRequest, User
+    req = WorkOrderRequest.query.get_or_404(request_id)
+    if req.company_id != current_user.company_id or req.status != 'pending':
+        return jsonify({'success': False, 'message': 'Invalid request'}), 400
+    reason = request.form.get('rejection_reason', '')
+    req.status = 'rejected'
+    req.rejection_reason = reason
+    db.session.commit()
+    # Notify requester by email
+    requester = User.query.get(req.requested_by_id)
+    if requester and requester.email:
+        subject = 'Work Order Request Rejected'
+        body = f"Your work order request '{req.title}' was rejected.\nReason: {reason}"
+        send_email(subject, [requester.email], body)
+    return jsonify({'success': True, 'message': 'Request rejected.'})
 
 @app.route('/admin/roles/<int:role_id>')
 @login_required
@@ -5263,8 +5418,10 @@ def quick_maintenance_schedule():
     return render_template('quick_maintenance_schedule.html', equipment_list=equipment_list)
 
 @app.route('/qr-report/<equipment_id>', methods=['GET', 'POST'])
+@login_required
 def qr_failure_report(equipment_id):
     """QR code failure reporting page"""
+    from models import User, WorkOrder, WorkOrderRequest, Equipment
     equipment = Equipment.query.filter_by(id=equipment_id).first_or_404()
     if request.method == 'POST':
         try:
@@ -5300,38 +5457,80 @@ def qr_failure_report(equipment_id):
                     file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'audio')
                     if file_path:
                         audio_files.append(file_path)
-            from models import User, WorkOrder
-            technicians = User.query.filter_by(company_id=equipment.company_id, role='technician', is_active=True).all()
-            technician_id = None
-            if technicians:
-                tech_counts = [(tech, WorkOrder.query.filter_by(assigned_technician_id=tech.id).count()) for tech in technicians]
-                tech_counts.sort(key=lambda x: (x[1], x[0].id))
-                technician_id = tech_counts[0][0].id
-            work_order = WorkOrder(
-                company_id=equipment.company_id,
-                work_order_number=generate_work_order_number(),
-                title=f"QR Report: {failure_type.title()} Failure - {equipment.name}",
-                description=f"Failure reported via QR code:\n\n{description}\n\nReporter: {reporter_name or 'Anonymous'}\nPhone: {reporter_phone or 'Not provided'}",
-                priority='urgent' if urgency == 'high' else 'high',
-                status='open',
-                type='corrective',
-                equipment_id=equipment.id,
-                assigned_technician_id=technician_id,
-                created_by_id=1,  # Default admin user, you might want to handle this differently
-                scheduled_date=datetime.now(),
-                due_date=datetime.now() + timedelta(hours=4) if urgency == 'high' else datetime.now() + timedelta(days=1),
-                images=','.join(images) if images else None,
-                videos=','.join(videos) if videos else None,
-                voice_notes=','.join(audio_files) if audio_files else None,
-                estimated_duration=estimated_duration
-            )
-            db.session.add(work_order)
-            if equipment.status == 'operational':
-                equipment.status = 'maintenance'
-                equipment.updated_at = datetime.utcnow()
-            db.session.commit()
-            flash(f'Failure report submitted successfully! Work Order #{work_order.work_order_number} has been created.', 'success')
-            return render_template('qr_failure_report_success.html', work_order=work_order, equipment=equipment)
+
+            if current_user.role not in ['admin', 'manager']:
+                # REGULAR USER: Save as WorkOrderRequest
+                work_order_request = WorkOrderRequest(
+                    company_id=equipment.company_id,
+                    title=f"QR Report: {failure_type.title()} Failure - {equipment.name}",
+                    description=f"Failure reported via QR code:\n\n{description}\n\nReporter: {reporter_name or 'Anonymous'}\nPhone: {reporter_phone or 'Not provided'}",
+                    priority='urgent' if urgency == 'high' else 'high',
+                    type='corrective',
+                    equipment_id=equipment.id,
+                    location_id=equipment.location_id,
+                    requested_by_id=current_user.id,
+                    status='pending'
+                )
+                # Store file paths as comma-separated strings
+                work_order_request.images = ','.join(images) if images else None
+                work_order_request.videos = ','.join(videos) if videos else None
+                work_order_request.voice_notes = ','.join(audio_files) if audio_files else None
+                work_order_request.estimated_duration = estimated_duration
+                db.session.add(work_order_request)
+                db.session.commit()
+                # Notify admins/managers by email
+                admin_manager_users = User.query.filter(
+                    User.company_id == equipment.company_id,
+                    User.role.in_(['admin', 'manager']),
+                    User.is_active == True
+                ).all()
+                if admin_manager_users:
+                    recipients = [u.email for u in admin_manager_users if u.email]
+                    subject = 'New Work Order Request Submitted (QR Report)'
+                    approval_link = url_for('admin_work_order_approvals', _external=True)
+                    body = (
+                        f"A new work order request has been submitted via QR report by {current_user.first_name} {current_user.last_name}.\n\n"
+                        f"Title: QR Report: {failure_type.title()} Failure - {equipment.name}\n"
+                        f"Description: {description}\n"
+                        f"Priority: {'urgent' if urgency == 'high' else 'high'}\n\n"
+                        f"Please review and approve/reject this request in the admin dashboard:\n{approval_link}"
+                    )
+                    send_email(subject, recipients, body)
+                flash('Work order request submitted for approval!', 'success')
+                return redirect(url_for('my_work_order_requests'))
+            else:
+                # ADMIN/MANAGER: Create WorkOrder directly
+                technicians = User.query.filter_by(company_id=equipment.company_id, role='technician', is_active=True).all()
+                technician_id = None
+                if technicians:
+                    tech_counts = [(tech, WorkOrder.query.filter_by(assigned_technician_id=tech.id).count()) for tech in technicians]
+                    tech_counts.sort(key=lambda x: (x[1], x[0].id))
+                    technician_id = tech_counts[0][0].id
+                work_order = WorkOrder(
+                    company_id=equipment.company_id,
+                    work_order_number=generate_work_order_number(),
+                    title=f"QR Report: {failure_type.title()} Failure - {equipment.name}",
+                    description=f"Failure reported via QR code:\n\n{description}\n\nReporter: {reporter_name or 'Anonymous'}\nPhone: {reporter_phone or 'Not provided'}",
+                    priority='urgent' if urgency == 'high' else 'high',
+                    status='open',
+                    type='corrective',
+                    equipment_id=equipment.id,
+                    assigned_technician_id=technician_id,
+                    created_by_id=current_user.id,
+                    scheduled_date=datetime.now(),
+                    due_date=datetime.now() + timedelta(hours=4) if urgency == 'high' else datetime.now() + timedelta(days=1),
+                    images=','.join(images) if images else None,
+                    videos=','.join(videos) if videos else None,
+                    voice_notes=','.join(audio_files) if audio_files else None,
+                    estimated_duration=estimated_duration
+                )
+                db.session.add(work_order)
+                if equipment.status == 'operational':
+                    equipment.status = 'maintenance'
+                    equipment.updated_at = datetime.utcnow()
+                db.session.commit()
+                flash(f'Failure report submitted successfully! Work Order #{work_order.work_order_number} has been created.', 'success')
+                return render_template('qr_failure_report_success.html', work_order=work_order, equipment=equipment)
         except Exception as e:
             db.session.rollback()
             flash(f'Error submitting report: {str(e)}', 'error')

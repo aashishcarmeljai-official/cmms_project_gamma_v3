@@ -287,6 +287,48 @@ class WorkOrder(db.Model):
             'updated_at': self.updated_at.isoformat()
         }
 
+class WorkOrderRequest(db.Model):
+    __tablename__ = 'work_order_requests'
+
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    priority = db.Column(db.String(20), default='medium')  # low, medium, high, urgent
+    type = db.Column(db.String(20), default='corrective')  # corrective, preventive, emergency
+    equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'), nullable=False)
+    location_id = db.Column(db.Integer, db.ForeignKey('locations.id'))
+    requested_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    status = db.Column(db.String(20), default='pending')  # pending, approved, rejected
+    rejection_reason = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    company = db.relationship('Company', backref='work_order_requests')
+    equipment = db.relationship('Equipment', backref='work_order_requests')
+    location = db.relationship('Location', backref='work_order_requests')
+    requested_by = db.relationship('User', backref='work_order_requests')
+
+    def __repr__(self):
+        return f'<WorkOrderRequest {self.title} ({self.status})>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'priority': self.priority,
+            'type': self.type,
+            'equipment_id': self.equipment_id,
+            'location_id': self.location_id,
+            'requested_by_id': self.requested_by_id,
+            'status': self.status,
+            'rejection_reason': self.rejection_reason,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
 class MaintenanceSchedule(db.Model):
     __tablename__ = 'maintenance_schedules'
     
