@@ -149,4 +149,9 @@ logs/
 
 # Temporary files
 *.tmp
-*.temp 
+*.temp
+
+admin_credentials.json
+emails.json
+
+generate_key.py

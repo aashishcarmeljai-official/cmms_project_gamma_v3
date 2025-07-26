@@ -26,6 +26,7 @@ from sqlalchemy.orm import joinedload
 import openai
 import pycountry
 from typing import Sequence
+from functools import wraps
 
 # Load environment variables
 load_dotenv()
@@ -521,6 +522,59 @@ def index():
 def health():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'message': 'CMMS is running!'})
+
+def email_admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        print(f"DEBUG: Checking email admin access. Session: {session.get('email_admin_logged_in')}")
+        if not session.get('email_admin_logged_in'):
+            print("DEBUG: No email admin session, redirecting to login")
+            return redirect(url_for('login'))
+        print("DEBUG: Email admin session found, allowing access")
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/manage-emails', methods=['GET', 'POST'])
+@email_admin_required
+def manage_emails():
+    import json
+    emails_path = os.path.join(os.path.dirname(__file__), 'emails.json')
+    # Load emails
+    with open(emails_path, 'r') as f:
+        emails = json.load(f)
+    # Handle add
+    if request.method == 'POST' and 'add_email' in request.form:
+        new_email = request.form.get('new_email', '').strip()
+        if new_email and new_email not in emails:
+            emails.append(new_email)
+            with open(emails_path, 'w') as f:
+                json.dump(emails, f, indent=2)
+    # Handle delete
+    if request.method == 'POST' and 'delete_email' in request.form:
+        del_email = request.form.get('delete_email')
+        if del_email in emails:
+            emails.remove(del_email)
+            with open(emails_path, 'w') as f:
+                json.dump(emails, f, indent=2)
+    # Handle edit
+    if request.method == 'POST' and 'edit_email' in request.form:
+        old_email = request.form.get('old_email')
+        new_email = request.form.get('edit_email', '').strip()
+        if old_email in emails and new_email:
+            idx = emails.index(old_email)
+            emails[idx] = new_email
+            with open(emails_path, 'w') as f:
+                json.dump(emails, f, indent=2)
+    # Reload emails after any change
+    with open(emails_path, 'r') as f:
+        emails = json.load(f)
+    return render_template('manage_emails.html', emails=emails)
+
+@app.route('/manage-emails/logout')
+def manage_emails_logout():
+    session.pop('email_admin_logged_in', None)
+    flash('Logged out from Email Admin.', 'success')
+    return redirect(url_for('login'))
 
 # Equipment routes
 @app.route('/equipment')
@@ -1734,20 +1788,16 @@ app.register_blueprint(google_bp, url_prefix="/login")
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     form = SignupForm()
-    companies = Company.query.all()
-    form.company_id.choices = [('', '--- Select an organization ---')] + [(str(c.id), c.name) for c in companies]
-    
+    # Remove organization type and company_id logic
     if request.method == 'POST':
-        # Custom validation based on organization type
-        if form.organization_type.data == 'new_org':
-            if not form.new_company.data or not form.new_company.data.strip():
-                flash('Please enter your organization name.', 'error')
-                return render_template('signup.html', form=form)
-        else:  # existing_org
-            if not form.company_id.data or form.company_id.data == '':
-                flash('Please select an organization to join.', 'error')
-                return render_template('signup.html', form=form)
-        
+        # Check if email is in emails.json
+        import json
+        emails_path = os.path.join(os.path.dirname(__file__), 'emails.json')
+        with open(emails_path, 'r') as f:
+            allowed_emails = json.load(f)
+        if form.email.data not in allowed_emails:
+            flash('This email is not authorized for signup.', 'error')
+            return render_template('signup.html', form=form)
         # Check for existing user
         if User.query.filter_by(email=form.email.data).first():
             flash('Email already registered.', 'error')
@@ -1755,41 +1805,27 @@ def signup():
         if User.query.filter_by(username=form.username.data).first():
             flash('Username already taken.', 'error')
             return render_template('signup.html', form=form)
-        
         try:
-            # Handle organization selection based on type
-            if form.organization_type.data == 'new_org':
-                # Create new organization
-                company = Company(name=form.new_company.data.strip())
-                db.session.add(company)
-                db.session.commit()
-                company_id = company.id
-                
-                # Create default roles for the new company
-                create_default_roles_for_company(company_id)
-                
-                # Create default departments for the new company
-                create_default_departments_for_company(company_id)
-                
-                # Create default categories for the new company
-                create_default_categories_for_company(company_id)
-            else:  # existing_org
-                company_id = int(form.company_id.data)
-            
-            # Create user
+            # Always create a new organization (company)
+            company = Company(name=form.new_company.data.strip())
+            db.session.add(company)
+            db.session.commit()
+            company_id = company.id
+            # Create default roles, departments, categories
+            create_default_roles_for_company(company_id)
+            create_default_departments_for_company(company_id)
+            create_default_categories_for_company(company_id)
+            # Create user as admin
             user = User()
             user.username = form.username.data
             user.email = form.email.data
             user.first_name = form.first_name.data
             user.last_name = form.last_name.data
             user.company_id = company_id
-            # Set admin role for the first user of a new organization
-            if form.organization_type.data == 'new_org':
-                user.role = 'admin'
-                admin_role = Role.query.filter_by(company_id=company_id, name='admin').first()
-                if admin_role:
-                    user.role_id = admin_role.id
-            
+            user.role = 'admin'
+            admin_role = Role.query.filter_by(company_id=company_id, name='admin').first()
+            if admin_role:
+                user.role_id = admin_role.id
             user.set_password(form.password.data)
             db.session.add(user)
             db.session.commit()
@@ -1810,18 +1846,26 @@ def signup():
             )
             flash(f'Invitation sent to {form.email.data}.', 'success')
             return redirect(url_for('login'))
-            
         except Exception as e:
             db.session.rollback()
             flash(f'An error occurred while creating your account. Please try again. Error: {str(e)}', 'error')
             return render_template('signup.html', form=form)
-    
     return render_template('signup.html', form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     form = LoginForm()
     if form.validate_on_submit():
+        # Load admin credentials from JSON file
+        import json
+        admin_creds_path = os.path.join(os.path.dirname(__file__), 'admin_credentials.json')
+        with open(admin_creds_path, 'r') as f:
+            admin_creds = json.load(f)
+        # Special case: redirect to email admin login if admin credentials entered
+        if form.email.data == admin_creds['email'] and form.password.data == admin_creds['password']:
+            session['email_admin_logged_in'] = True
+            flash('Super User - Add Mail ID of the Company', 'info')
+            return redirect(url_for('manage_emails'))
         user = User.query.filter_by(email=form.email.data).first()
         if user and user.check_password(form.password.data):
             # Update last login timestamp

@@ -26,8 +26,14 @@
             <h3 class="card-title text-center mb-4">Create Your Account</h3>
             <form method="POST" action="">
                 {{ form.hidden_tag() }}
-                
-                <!-- Personal Information -->
+                <div class="mb-3">
+                    {{ form.username.label(class="form-label") }}
+                    {{ form.username(class="form-control", placeholder="Choose a username") }}
+                </div>
+                <div class="mb-3">
+                    {{ form.email.label(class="form-label") }}
+                    {{ form.email(class="form-control", placeholder="Enter your email") }}
+                </div>
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
@@ -42,17 +48,6 @@
                         </div>
                     </div>
                 </div>
-                
-                <div class="mb-3">
-                    {{ form.username.label(class="form-label") }}
-                    {{ form.username(class="form-control", placeholder="Choose a username") }}
-                </div>
-                
-                <div class="mb-3">
-                    {{ form.email.label(class="form-label") }}
-                    {{ form.email(class="form-control", placeholder="Enter your email") }}
-                </div>
-                
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
@@ -67,44 +62,14 @@
                         </div>
                     </div>
                 </div>
-                
-                <!-- Organization Section -->
                 <hr class="my-4">
                 <h5 class="mb-3">Organization Setup</h5>
-                
                 <div class="mb-3">
-                    {{ form.organization_type.label(class="form-label fw-bold") }}
-                    {{ form.organization_type(class="form-select", id="orgType") }}
+                    <label for="new_company" class="form-label">Organization Name</label>
+                    {{ form.new_company(class="form-control", placeholder="Enter your organization name", required=True) }}
                 </div>
-                
-                <!-- New Organization Option -->
-                <div id="newOrgSection" class="mb-3" style="display: none;">
-                    <div class="alert alert-info">
-                        <i class="fas fa-building me-2"></i>
-                        <strong>Start Your Organization</strong><br>
-                        <small>Create a new organization and become the administrator. You'll have full control to invite team members, manage equipment, and oversee all maintenance operations.</small>
-                    </div>
-                    <div class="mb-3">
-                        {{ form.new_company.label(class="form-label") }}
-                        {{ form.new_company(class="form-control", placeholder="Enter your organization name") }}
-                    </div>
-                </div>
-                
-                <!-- Existing Organization Option -->
-                <div id="existingOrgSection" class="mb-3" style="display: none;">
-                    <div class="alert alert-success">
-                        <i class="fas fa-users me-2"></i>
-                        <strong>Join an Organization</strong><br>
-                        <small>Join an existing organization that you've been invited to. You'll have access to their maintenance management system.</small>
-                    </div>
-                    <div class="mb-3">
-                        {{ form.company_id.label(class="form-label") }}
-                        {{ form.company_id(class="form-select") }}
-                    </div>
-                </div>
-                
                 <div class="d-grid mb-3">
-                    {{ form.submit(class="btn btn-success btn-lg", id="submitBtn") }}
+                    <button type="submit" class="btn btn-success btn-lg">Sign Up</button>
                 </div>
             </form>
             <div class="text-center">
@@ -114,94 +79,4 @@
         </div>
     </div>
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const orgTypeSelect = document.getElementById('orgType');
-    const newOrgSection = document.getElementById('newOrgSection');
-    const existingOrgSection = document.getElementById('existingOrgSection');
-    const form = document.querySelector('form');
-    
-    function toggleOrgSections() {
-        const selectedValue = orgTypeSelect.value;
-        
-        if (selectedValue === 'new_org') {
-            newOrgSection.style.display = 'block';
-            existingOrgSection.style.display = 'none';
-            // Clear existing org selection
-            document.getElementById('company_id').value = '';
-        } else if (selectedValue === 'existing_org') {
-            newOrgSection.style.display = 'none';
-            existingOrgSection.style.display = 'block';
-            // Clear new org name
-            document.getElementById('new_company').value = '';
-        } else {
-            newOrgSection.style.display = 'none';
-            existingOrgSection.style.display = 'none';
-        }
-    }
-    
-    orgTypeSelect.addEventListener('change', toggleOrgSections);
-    
-    // Form validation
-    form.addEventListener('submit', function(e) {
-        const orgType = orgTypeSelect.value;
-        let isValid = true;
-        
-        // Clear previous error messages
-        document.querySelectorAll('.error-message').forEach(el => el.remove());
-        
-        if (orgType === 'new_org') {
-            const newCompanyField = document.getElementById('new_company');
-            if (!newCompanyField.value.trim()) {
-                showError(newCompanyField, 'Please enter your organization name.');
-                isValid = false;
-            }
-        } else if (orgType === 'existing_org') {
-            const companySelect = document.getElementById('company_id');
-            if (!companySelect.value || companySelect.value === '') {
-                showError(companySelect, 'Please select an organization to join.');
-                isValid = false;
-            }
-        }
-        
-        if (!isValid) {
-            e.preventDefault();
-        } else {
-            // Show loading state
-            const submitBtn = document.getElementById('submitBtn');
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Creating Account...';
-        }
-    });
-    
-    function showError(field, message) {
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'error-message text-danger mt-1';
-        errorDiv.textContent = message;
-        field.parentNode.appendChild(errorDiv);
-        field.classList.add('is-invalid');
-    }
-    
-    function clearError(field) {
-        field.classList.remove('is-invalid');
-        const errorDiv = field.parentNode.querySelector('.error-message');
-        if (errorDiv) {
-            errorDiv.remove();
-        }
-    }
-    
-    // Clear errors when fields are changed
-    document.getElementById('new_company').addEventListener('input', function() {
-        clearError(this);
-    });
-    
-    document.getElementById('company_id').addEventListener('change', function() {
-        clearError(this);
-    });
-    
-    // Initialize on page load
-    toggleOrgSections();
-});
-</script>
 {% endblock %} 
