@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{% if current_user.role == 'technician' %}My Maintenance Calendar - CMMS{% else %}Maintenance Calendar - CMMS{% endif %}{% endblock %}
+{% block title %}{% if current_user.role == 'technician' %}My Calendar - CMMS{% else %}Calendar - CMMS{% endif %}{% endblock %}
 
 {% block extra_head %}
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
@@ -21,13 +21,16 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0">
       {% if current_user.role == 'technician' %}
-        My Maintenance Calendar
+        My Calendar
       {% else %}
-        Maintenance Calendar
+        Calendar
       {% endif %}
     </h1>
     <a href="/work-orders" class="btn btn-outline-primary"><i class="fas fa-clipboard-list me-2"></i>Work Orders</a>
   </div>
+  
+
+  
   <div id="calendar"></div>
 </div>
 {% endblock %}
@@ -45,34 +48,18 @@ document.addEventListener('DOMContentLoaded', function() {
       right: 'dayGridMonth,timeGridWeek,timeGridDay'
     },
     height: 'auto',
-    events: [
-      {% for event in calendar_events %}
-      {
-        id: {{ event.id|tojson }},
-        title: {{ event.title|tojson }},
-        start: {{ event.start|tojson }},
-        end: {{ event.end|tojson }},
-        url: {{ event.url|tojson }},
-        extendedProps: {
-          equipment: {{ event.equipment_name|tojson }},
-          description: {{ event.description|tojson }},
-          assigned_team: {{ event.assigned_team|tojson }},
-          sop_name: {{ event.sop_name|tojson }}
-        }
-      },
-      {% endfor %}
-    ],
+    events: '/api/calendar-events',
     eventClick: function(info) {
-      // Open equipment detail in new tab
       if (info.event.url) {
         window.open(info.event.url, '_blank', 'location=no,menubar=no,toolbar=no,scrollbars=yes,resizable=yes,width=1200,height=800');
         info.jsEvent.preventDefault();
       }
     },
     eventDidMount: function(info) {
-      // Tooltip for event details
+      var eventType = info.event.extendedProps.type === 'work_order' ? 'Work Order' : 'Maintenance';
       var tooltip = new bootstrap.Tooltip(info.el, {
         title: `<strong>${info.event.title}</strong><br>
+                <b>Type:</b> ${eventType}<br>
                 <b>Equipment:</b> ${info.event.extendedProps.equipment}<br>
                 <b>Team:</b> ${info.event.extendedProps.assigned_team || 'N/A'}<br>
                 <b>SOP:</b> ${info.event.extendedProps.sop_name || 'N/A'}<br>

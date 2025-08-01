@@ -266,6 +266,7 @@
                                     <p class="mb-0" id="recordingStatus">Click to start recording</p>
                                 </div>
                                 <input type="file" id="voice_notes" name="voice_notes" multiple accept="audio/*" style="display: none;" onchange="handleVoiceUpload(this)">
+                                <input type="file" id="voice_notes_managed" name="voice_notes" multiple accept="audio/*" style="display: none;">
                                 <button type="button" class="upload-btn" onclick="document.getElementById('voice_notes').click()">
                                     <i class="fas fa-upload"></i>Upload Audio Files
                                 </button>
@@ -403,6 +404,10 @@ function handleVideoUpload(input) {
 function handleVoiceUpload(input) {
     const files = Array.from(input.files);
     const preview = document.getElementById('voicePreview');
+    const managedInput = document.getElementById('voice_notes_managed');
+    
+    // Clear existing files and preview when new files are uploaded
+    clearVoiceFiles();
     
     files.forEach(file => {
         if (file.type.startsWith('audio/')) {
@@ -413,13 +418,46 @@ function handleVoiceUpload(input) {
                 <button type="button" class="remove-btn" onclick="removeMediaItem(this)">×</button>
             `;
             preview.appendChild(mediaItem);
+            
+            // Add to managed input
+            addFileToManagedInput(managedInput, file);
         }
     });
+    
+    console.log('Voice files uploaded:', files.length, 'Total voice files:', managedInput.files.length);
 }
 
 // Remove media item
 function removeMediaItem(button) {
     button.parentElement.remove();
+}
+
+// Unified function to add files to managed input
+function addFileToManagedInput(managedInput, file) {
+    const dt = new DataTransfer();
+    
+    // Add existing files first
+    for (let i = 0; i < managedInput.files.length; i++) {
+        dt.items.add(managedInput.files[i]);
+    }
+    // Add the new file
+    dt.items.add(file);
+    managedInput.files = dt.files;
+    
+    console.log('File added to managed input:', file.name, 'Total files:', managedInput.files.length);
+}
+
+// Function to clear all voice files
+function clearVoiceFiles() {
+    const managedInput = document.getElementById('voice_notes_managed');
+    const originalInput = document.getElementById('voice_notes');
+    const preview = document.getElementById('voicePreview');
+    
+    managedInput.value = '';
+    originalInput.value = '';
+    preview.innerHTML = '';
+    
+    console.log('Voice files cleared');
 }
 
 // Voice recording functionality
@@ -455,12 +493,10 @@ async function toggleRecording() {
                 `;
                 preview.appendChild(mediaItem);
                 
-                // Create file input for form submission
-                const fileInput = document.getElementById('voice_notes');
+                // Add recorded file to managed input
                 const file = new File([audioBlob], `voice_note_${Date.now()}.wav`, { type: 'audio/wav' });
-                const dt = new DataTransfer();
-                dt.items.add(file);
-                fileInput.files = dt.files;
+                const managedInput = document.getElementById('voice_notes_managed');
+                addFileToManagedInput(managedInput, file);
             };
             
             mediaRecorder.start();
@@ -587,6 +623,29 @@ function addFileToInput(inputId, file) {
 document.getElementById('workOrderForm').addEventListener('submit', function(e) {
     const submitBtn = this.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
+    
+    // Debug: Log form data
+    const formData = new FormData(this);
+    console.log('Form submission - Files being sent:');
+    console.log('Images:', formData.getAll('images').length);
+    console.log('Videos:', formData.getAll('videos').length);
+    console.log('Voice notes (original):', formData.getAll('voice_notes').length);
+    
+    // Check managed voice input
+    const managedVoiceInput = document.getElementById('voice_notes_managed');
+    console.log('Managed voice files:', managedVoiceInput.files.length);
+    
+    // Clear the original input first to avoid duplicates
+    const originalVoiceInput = document.getElementById('voice_notes');
+    originalVoiceInput.value = '';
+    
+    // Copy managed files to the original input for form submission
+    const dt = new DataTransfer();
+    for (let i = 0; i < managedVoiceInput.files.length; i++) {
+        dt.items.add(managedVoiceInput.files[i]);
+    }
+    originalVoiceInput.files = dt.files;
+    console.log('Voice notes (after copy):', originalVoiceInput.files.length);
     
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating...';
     submitBtn.disabled = true;

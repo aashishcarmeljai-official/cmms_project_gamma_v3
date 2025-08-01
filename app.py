@@ -976,8 +976,79 @@ def work_order_new():
                     status='open'
                 )
                 db.session.add(work_order)
-                db.session.commit()
-                flash('Work order created successfully!', 'success')
+                db.session.flush()  # Get the work order ID
+                
+                # Handle file uploads if any
+                uploaded_files = {}
+                upload_dir = os.path.join(app.static_folder or '', 'uploads', 'work_orders')
+                
+                try:
+                    # Process images
+                    image_files = request.files.getlist('images')
+                    if image_files and any(f.filename for f in image_files):
+                        image_paths = []
+                        for file in image_files:
+                            if file.filename:
+                                file_path = save_uploaded_file(file, upload_dir, 'image')
+                                if file_path:
+                                    image_paths.append(file_path)
+                        if image_paths:
+                            work_order.images = ','.join(image_paths)
+                            uploaded_files['images'] = image_paths
+                    
+                    # Process videos
+                    video_files = request.files.getlist('videos')
+                    if video_files and any(f.filename for f in video_files):
+                        video_paths = []
+                        for file in video_files:
+                            if file.filename:
+                                file_path = save_uploaded_file(file, upload_dir, 'video')
+                                if file_path:
+                                    video_paths.append(file_path)
+                        if video_paths:
+                            work_order.videos = ','.join(video_paths)
+                            uploaded_files['videos'] = video_paths
+                    
+                    # Process voice notes
+                    voice_files = request.files.getlist('voice_notes')
+                    if voice_files and any(f.filename for f in voice_files):
+                        voice_paths = []
+                        for file in voice_files:
+                            if file.filename:
+                                file_path = save_uploaded_file(file, upload_dir, 'audio')
+                                if file_path:
+                                    voice_paths.append(file_path)
+                        if voice_paths:
+                            work_order.voice_notes = ','.join(voice_paths)
+                            uploaded_files['voice_notes'] = voice_paths
+                    
+                    db.session.commit()
+                    
+                except Exception as e:
+                    # Clean up uploaded files if there's an error
+                    print(f"Error during work order creation: {e}")
+                    if uploaded_files:
+                        for file_type, file_paths in uploaded_files.items():
+                            delete_files(file_paths)
+                    db.session.rollback()
+                    flash(f'Error creating work order: {str(e)}', 'error')
+                    return redirect(url_for('work_orders_list'))
+                
+                # Add success message with file upload info
+                if uploaded_files:
+                    total_files = sum(len(files) for files in uploaded_files.values())
+                    file_types = []
+                    if 'images' in uploaded_files:
+                        file_types.append(f"{len(uploaded_files['images'])} image(s)")
+                    if 'videos' in uploaded_files:
+                        file_types.append(f"{len(uploaded_files['videos'])} video(s)")
+                    if 'voice_notes' in uploaded_files:
+                        file_types.append(f"{len(uploaded_files['voice_notes'])} voice note(s)")
+                    
+                    flash(f'Work order created successfully with {total_files} file(s): {", ".join(file_types)}!', 'success')
+                else:
+                    flash('Work order created successfully!', 'success')
+                
                 return redirect(url_for('work_orders_list'))
         else:
             flash('Please fill all required fields.', 'error')
@@ -1106,24 +1177,23 @@ def work_order_delete(id):
         abort(403)
     work_order = WorkOrder.query.get_or_404(id)
     enforce_company_access(work_order)
-    # Delete associated comment files
-    comments = WorkOrderComment.query.filter_by(work_order_id=id).all()
-    for comment in comments:
-        delete_files(comment.images)
-        delete_files(comment.videos)
-        delete_files(comment.voice_notes)
-    # Delete associated comments
-    WorkOrderComment.query.filter_by(work_order_id=id).delete()
-    # Delete associated checklist items
-    WorkOrderChecklist.query.filter_by(work_order_id=id).delete()
-    # Delete work order files
-    delete_files(work_order.images)
-    delete_files(work_order.videos)
-    delete_files(work_order.voice_notes)
-    # Delete the work order
-    db.session.delete(work_order)
-    db.session.commit()
-    flash('Work order and associated files deleted successfully!', 'success')
+    
+    try:
+        # Clean up all files associated with the work order
+        cleanup_work_order_files(work_order)
+        
+        # Delete associated comments and checklist items
+        WorkOrderComment.query.filter_by(work_order_id=id).delete()
+        WorkOrderChecklist.query.filter_by(work_order_id=id).delete()
+        
+        # Delete the work order
+        db.session.delete(work_order)
+        db.session.commit()
+        flash('Work order and associated files deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting work order: {str(e)}', 'error')
+    
     return redirect(url_for('work_orders_list'))
 
 @app.route('/work-orders/<int:id>/add-comment', methods=['POST'])
@@ -1482,47 +1552,84 @@ def api_calendar_events():
 @app.route('/api/work-orders/<int:work_order_id>/upload-media', methods=['POST'])
 @login_required
 def api_upload_media(work_order_id):
-    """API endpoint for mobile media uploads with progress tracking"""
+    """API endpoint for mobile media uploads with progress tracking - supports multiple media types"""
     work_order = WorkOrder.query.get_or_404(work_order_id)
     
     try:
-        media_type = request.form.get('media_type', 'image')  # image, video, voice
-        media_files = []
+        uploaded_files = {}
+        upload_dir = os.path.join(app.static_folder or '', 'uploads', 'work_orders')
         
-        if media_type == 'image':
-            files = request.files.getlist('images')
-            for file in files:
-                upload_dir = os.path.join(app.static_folder or '', 'uploads', 'work_orders')
-                file_path = save_uploaded_file(file, upload_dir, 'image')
-                if file_path:
-                    media_files.append(file_path)
-        elif media_type == 'video':
-            files = request.files.getlist('videos')
-            for file in files:
-                upload_dir = os.path.join(app.static_folder or '', 'uploads', 'work_orders')
-                file_path = save_uploaded_file(file, upload_dir, 'video')
-                if file_path:
-                    media_files.append(file_path)
-        elif media_type == 'voice':
-            files = request.files.getlist('voice_notes')
-            for file in files:
-                upload_dir = os.path.join(app.static_folder or '', 'uploads', 'work_orders')
-                file_path = save_uploaded_file(file, upload_dir, 'audio')
-                if file_path:
-                    media_files.append(file_path)
+        # Process images
+        image_files = request.files.getlist('images')
+        if image_files and any(f.filename for f in image_files):
+            image_paths = []
+            for file in image_files:
+                if file.filename:
+                    file_path = save_uploaded_file(file, upload_dir, 'image')
+                    if file_path:
+                        image_paths.append(file_path)
+            if image_paths:
+                current_images = work_order.images or ''
+                updated_images = ','.join([current_images, *image_paths]) if current_images else ','.join(image_paths)
+                work_order.images = updated_images
+                uploaded_files['images'] = image_paths
         
-        # Update work order with new media
-        if media_files:
-            current_media = getattr(work_order, f'{media_type}s', '') or ''
-            updated_media = ','.join([current_media, *media_files]) if current_media else ','.join(media_files)
-            setattr(work_order, f'{media_type}s', updated_media)
+        # Process videos
+        video_files = request.files.getlist('videos')
+        if video_files and any(f.filename for f in video_files):
+            video_paths = []
+            for file in video_files:
+                if file.filename:
+                    file_path = save_uploaded_file(file, upload_dir, 'video')
+                    if file_path:
+                        video_paths.append(file_path)
+            if video_paths:
+                current_videos = work_order.videos or ''
+                updated_videos = ','.join([current_videos, *video_paths]) if current_videos else ','.join(video_paths)
+                work_order.videos = updated_videos
+                uploaded_files['videos'] = video_paths
+        
+        # Process voice notes
+        voice_files = request.files.getlist('voice_notes')
+        if voice_files and any(f.filename for f in voice_files):
+            voice_paths = []
+            for file in voice_files:
+                if file.filename:
+                    file_path = save_uploaded_file(file, upload_dir, 'audio')
+                    if file_path:
+                        voice_paths.append(file_path)
+            if voice_paths:
+                current_voice = work_order.voice_notes or ''
+                updated_voice = ','.join([current_voice, *voice_paths]) if current_voice else ','.join(voice_paths)
+                work_order.voice_notes = updated_voice
+                uploaded_files['voice_notes'] = voice_paths
+        
+        # Commit changes if any files were uploaded
+        if uploaded_files:
             db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': f'{len(media_files)} {media_type}(s) uploaded successfully',
-            'uploaded_files': media_files
-        })
+            
+            # Create summary message
+            total_files = sum(len(files) for files in uploaded_files.values())
+            file_types = []
+            if 'images' in uploaded_files:
+                file_types.append(f"{len(uploaded_files['images'])} image(s)")
+            if 'videos' in uploaded_files:
+                file_types.append(f"{len(uploaded_files['videos'])} video(s)")
+            if 'voice_notes' in uploaded_files:
+                file_types.append(f"{len(uploaded_files['voice_notes'])} voice note(s)")
+            
+            message = f"{total_files} file(s) uploaded successfully: {', '.join(file_types)}"
+            
+            return jsonify({
+                'success': True,
+                'message': message,
+                'uploaded_files': uploaded_files
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No valid files were uploaded'
+            }), 400
         
     except Exception as e:
         return jsonify({
@@ -1533,7 +1640,7 @@ def api_upload_media(work_order_id):
 @app.route('/api/work-orders/<int:work_order_id>/comments/<int:comment_id>/upload-media', methods=['POST'])
 @login_required
 def api_upload_comment_media(work_order_id, comment_id):
-    """API endpoint for uploading media to comments"""
+    """API endpoint for uploading media to comments - supports multiple media types"""
     work_order = WorkOrder.query.get_or_404(work_order_id)
     comment = WorkOrderComment.query.get_or_404(comment_id)
     
@@ -1541,43 +1648,80 @@ def api_upload_comment_media(work_order_id, comment_id):
         return jsonify({'success': False, 'message': 'Comment not found'}), 404
     
     try:
-        media_type = request.form.get('media_type', 'image')
-        media_files = []
+        uploaded_files = {}
+        upload_dir = os.path.join(app.static_folder or '', 'uploads', 'comments')
         
-        if media_type == 'image':
-            files = request.files.getlist('images')
-            for file in files:
-                upload_dir = os.path.join(app.static_folder or '', 'uploads', 'comments')
-                file_path = save_uploaded_file(file, upload_dir, 'image')
-                if file_path:
-                    media_files.append(file_path)
-        elif media_type == 'video':
-            files = request.files.getlist('videos')
-            for file in files:
-                upload_dir = os.path.join(app.static_folder or '', 'uploads', 'comments')
-                file_path = save_uploaded_file(file, upload_dir, 'video')
-                if file_path:
-                    media_files.append(file_path)
-        elif media_type == 'voice':
-            files = request.files.getlist('voice_notes')
-            for file in files:
-                upload_dir = os.path.join(app.static_folder or '', 'uploads', 'comments')
-                file_path = save_uploaded_file(file, upload_dir, 'audio')
-                if file_path:
-                    media_files.append(file_path)
+        # Process images
+        image_files = request.files.getlist('images')
+        if image_files and any(f.filename for f in image_files):
+            image_paths = []
+            for file in image_files:
+                if file.filename:
+                    file_path = save_uploaded_file(file, upload_dir, 'image')
+                    if file_path:
+                        image_paths.append(file_path)
+            if image_paths:
+                current_images = comment.images or ''
+                updated_images = ','.join([current_images, *image_paths]) if current_images else ','.join(image_paths)
+                comment.images = updated_images
+                uploaded_files['images'] = image_paths
         
-        # Update comment with new media
-        if media_files:
-            current_media = getattr(comment, f'{media_type}s', '') or ''
-            updated_media = ','.join([current_media, *media_files]) if current_media else ','.join(media_files)
-            setattr(comment, f'{media_type}s', updated_media)
+        # Process videos
+        video_files = request.files.getlist('videos')
+        if video_files and any(f.filename for f in video_files):
+            video_paths = []
+            for file in video_files:
+                if file.filename:
+                    file_path = save_uploaded_file(file, upload_dir, 'video')
+                    if file_path:
+                        video_paths.append(file_path)
+            if video_paths:
+                current_videos = comment.videos or ''
+                updated_videos = ','.join([current_videos, *video_paths]) if current_videos else ','.join(video_paths)
+                comment.videos = updated_videos
+                uploaded_files['videos'] = video_paths
+        
+        # Process voice notes
+        voice_files = request.files.getlist('voice_notes')
+        if voice_files and any(f.filename for f in voice_files):
+            voice_paths = []
+            for file in voice_files:
+                if file.filename:
+                    file_path = save_uploaded_file(file, upload_dir, 'audio')
+                    if file_path:
+                        voice_paths.append(file_path)
+            if voice_paths:
+                current_voice = comment.voice_notes or ''
+                updated_voice = ','.join([current_voice, *voice_paths]) if current_voice else ','.join(voice_paths)
+                comment.voice_notes = updated_voice
+                uploaded_files['voice_notes'] = voice_paths
+        
+        # Commit changes if any files were uploaded
+        if uploaded_files:
             db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': f'{len(media_files)} {media_type}(s) uploaded successfully',
-            'uploaded_files': media_files
-        })
+            
+            # Create summary message
+            total_files = sum(len(files) for files in uploaded_files.values())
+            file_types = []
+            if 'images' in uploaded_files:
+                file_types.append(f"{len(uploaded_files['images'])} image(s)")
+            if 'videos' in uploaded_files:
+                file_types.append(f"{len(uploaded_files['videos'])} video(s)")
+            if 'voice_notes' in uploaded_files:
+                file_types.append(f"{len(uploaded_files['voice_notes'])} voice note(s)")
+            
+            message = f"{total_files} file(s) uploaded successfully: {', '.join(file_types)}"
+            
+            return jsonify({
+                'success': True,
+                'message': message,
+                'uploaded_files': uploaded_files
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No valid files were uploaded'
+            }), 400
         
     except Exception as e:
         return jsonify({
@@ -2503,7 +2647,7 @@ def sop_delete_checklist_item(id, item_id):
 @app.route('/calendar')
 @login_required
 def maintenance_calendar():
-    """Calendar view of upcoming maintenance tasks"""
+    """Calendar view of upcoming maintenance tasks and work orders"""
     # Get date range for calendar (current month by default)
     year = request.args.get('year', datetime.now().year, type=int)
     month = request.args.get('month', datetime.now().month, type=int)
@@ -2511,20 +2655,36 @@ def maintenance_calendar():
     # Filter maintenance schedules based on user role
     if current_user.role == 'technician':
         # For technicians, show only maintenance assigned to them or their teams
+        team_ids = [team.id for team in current_user.teams] if current_user.teams else []
         schedules = MaintenanceSchedule.query.filter(
             MaintenanceSchedule.is_active == True,
-            (MaintenanceSchedule.assigned_team_id.in_([team.id for team in current_user.teams]))
+            (MaintenanceSchedule.assigned_team_id.in_(team_ids) if team_ids else False)
         ).all()
     else:
         # For others, show all active maintenance schedules
         schedules = MaintenanceSchedule.query.filter_by(is_active=True).all()
     
+    # Filter work orders based on user role
+    if current_user.role == 'technician':
+        # For technicians, show only assigned work orders
+        team_ids = [team.id for team in current_user.teams] if current_user.teams else []
+        work_orders = filter_by_company(WorkOrder.query).filter(
+            WorkOrder.scheduled_date != None,
+            (WorkOrder.assigned_technician_id == current_user.id) |
+            (WorkOrder.assigned_team_id.in_(team_ids) if team_ids else False)
+        ).all()
+    else:
+        # For others, show all work orders with scheduled dates
+        work_orders = filter_by_company(WorkOrder.query).filter(WorkOrder.scheduled_date != None).all()
+    
     # Generate calendar events
     calendar_events = []
+    
+    # Add maintenance schedule events
     for schedule in schedules:
         if schedule.next_due:
             calendar_events.append({
-                'id': schedule.id,
+                'id': f'ms-{schedule.id}',
                 'title': f"{schedule.equipment.name if schedule.equipment else 'Unknown'} - {schedule.description}",
                 'start': schedule.next_due.isoformat(),
                 'end': (schedule.next_due + timedelta(minutes=schedule.estimated_duration or 60)).isoformat(),
@@ -2532,7 +2692,24 @@ def maintenance_calendar():
                 'description': schedule.description,
                 'assigned_team': schedule.assigned_team.name if schedule.assigned_team else None,
                 'sop_name': schedule.sop.name if schedule.sop else None,
-                'url': url_for('equipment_detail', id=schedule.equipment_id)
+                'url': url_for('equipment_detail', id=schedule.equipment_id),
+                'type': 'maintenance'
+            })
+    
+    # Add work order events
+    for wo in work_orders:
+        if wo.scheduled_date:
+            calendar_events.append({
+                'id': f'wo-{wo.id}',
+                'title': f"WO: {wo.title}",
+                'start': wo.scheduled_date.isoformat(),
+                'end': (wo.scheduled_date + timedelta(hours=2)).isoformat() if wo.scheduled_date else None,
+                'equipment_name': wo.equipment.name if wo.equipment else 'N/A',
+                'description': wo.description,
+                'assigned_team': wo.assigned_team.name if wo.assigned_team else None,
+                'sop_name': None,
+                'url': url_for('work_order_detail', id=wo.id),
+                'type': 'work_order'
             })
     
     return render_template('maintenance_calendar.html', 
@@ -5481,100 +5658,149 @@ def qr_failure_report(equipment_id):
             if not description:
                 flash('Please provide a description of the failure.', 'error')
                 return render_template('qr_failure_report.html', equipment=equipment)
-            # Only save files if form is valid
+            
+            # Initialize file arrays
             images = []
             videos = []
             audio_files = []
             static_folder = app.static_folder or ''
-            if 'images' in request.files:
-                for file in request.files.getlist('images'):
-                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'image')
-                    if file_path:
-                        images.append(file_path)
-            if 'videos' in request.files:
-                for file in request.files.getlist('videos'):
-                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'video')
-                    if file_path:
-                        videos.append(file_path)
-            if 'audio_files' in request.files:
-                for file in request.files.getlist('audio_files'):
-                    file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'audio')
-                    if file_path:
-                        audio_files.append(file_path)
+            
+            try:
+                # Process images
+                if 'images' in request.files:
+                    for file in request.files.getlist('images'):
+                        if file.filename:
+                            file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'image')
+                            if file_path:
+                                images.append(file_path)
+                
+                # Process videos
+                if 'videos' in request.files:
+                    for file in request.files.getlist('videos'):
+                        if file.filename:
+                            file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'video')
+                            if file_path:
+                                videos.append(file_path)
+                
+                # Process voice notes
+                if 'voice_notes' in request.files:
+                    for file in request.files.getlist('voice_notes'):
+                        if file.filename:
+                            file_path = save_uploaded_file(file, os.path.join(static_folder, 'uploads', 'work_orders'), 'audio')
+                            if file_path:
+                                audio_files.append(file_path)
+                                
+            except Exception as e:
+                # Clean up any uploaded files if there's an error
+                print(f"Error during QR failure report file upload: {e}")
+                if images:
+                    delete_files(images)
+                if videos:
+                    delete_files(videos)
+                if audio_files:
+                    delete_files(audio_files)
+                flash(f'Error uploading files: {str(e)}', 'error')
+                return render_template('qr_failure_report.html', equipment=equipment)
 
             if current_user.role not in ['admin', 'manager']:
                 # REGULAR USER: Save as WorkOrderRequest
-                work_order_request = WorkOrderRequest(
-                    company_id=equipment.company_id,
-                    title=f"QR Report: {failure_type.title()} Failure - {equipment.name}",
-                    description=f"Failure reported via QR code:\n\n{description}\n\nReporter: {reporter_name or 'Anonymous'}\nPhone: {reporter_phone or 'Not provided'}",
-                    priority='urgent' if urgency == 'high' else 'high',
-                    type='corrective',
-                    equipment_id=equipment.id,
-                    location_id=equipment.location_id,
-                    requested_by_id=current_user.id,
-                    status='pending'
-                )
-                # Store file paths as comma-separated strings
-                work_order_request.images = ','.join(images) if images else None
-                work_order_request.videos = ','.join(videos) if videos else None
-                work_order_request.voice_notes = ','.join(audio_files) if audio_files else None
-                work_order_request.estimated_duration = estimated_duration
-                db.session.add(work_order_request)
-                db.session.commit()
-                # Notify admins/managers by email
-                admin_manager_users = User.query.filter(
-                    User.company_id == equipment.company_id,
-                    User.role.in_(['admin', 'manager']),
-                    User.is_active == True
-                ).all()
-                if admin_manager_users:
-                    recipients = [u.email for u in admin_manager_users if u.email]
-                    subject = 'New Work Order Request Submitted (QR Report)'
-                    approval_link = url_for('admin_work_order_approvals', _external=True)
-                    body = (
-                        f"A new work order request has been submitted via QR report by {current_user.first_name} {current_user.last_name}.\n\n"
-                        f"Title: QR Report: {failure_type.title()} Failure - {equipment.name}\n"
-                        f"Description: {description}\n"
-                        f"Priority: {'urgent' if urgency == 'high' else 'high'}\n\n"
-                        f"Please review and approve/reject this request in the admin dashboard:\n{approval_link}"
+                try:
+                    work_order_request = WorkOrderRequest(
+                        company_id=equipment.company_id,
+                        title=f"QR Report: {failure_type.title()} Failure - {equipment.name}",
+                        description=f"Failure reported via QR code:\n\n{description}\n\nReporter: {reporter_name or 'Anonymous'}\nPhone: {reporter_phone or 'Not provided'}",
+                        priority='urgent' if urgency == 'high' else 'high',
+                        type='corrective',
+                        equipment_id=equipment.id,
+                        location_id=equipment.location_id,
+                        requested_by_id=current_user.id,
+                        status='pending'
                     )
-                    send_email(subject, recipients, body)
-                flash('Work order request submitted for approval!', 'success')
-                return redirect(url_for('my_work_order_requests'))
+                    # Store file paths as comma-separated strings
+                    work_order_request.images = ','.join(images) if images else None
+                    work_order_request.videos = ','.join(videos) if videos else None
+                    work_order_request.voice_notes = ','.join(audio_files) if audio_files else None
+                    work_order_request.estimated_duration = estimated_duration
+                    db.session.add(work_order_request)
+                    db.session.commit()
+                    # Notify admins/managers by email
+                    admin_manager_users = User.query.filter(
+                        User.company_id == equipment.company_id,
+                        User.role.in_(['admin', 'manager']),
+                        User.is_active == True
+                    ).all()
+                    if admin_manager_users:
+                        recipients = [u.email for u in admin_manager_users if u.email]
+                        subject = 'New Work Order Request Submitted (QR Report)'
+                        approval_link = url_for('admin_work_order_approvals', _external=True)
+                        body = (
+                            f"A new work order request has been submitted via QR report by {current_user.first_name} {current_user.last_name}.\n\n"
+                            f"Title: QR Report: {failure_type.title()} Failure - {equipment.name}\n"
+                            f"Description: {description}\n"
+                            f"Priority: {'urgent' if urgency == 'high' else 'high'}\n\n"
+                            f"Please review and approve/reject this request in the admin dashboard:\n{approval_link}"
+                        )
+                        send_email(subject, recipients, body)
+                    flash('Work order request submitted for approval!', 'success')
+                    return redirect(url_for('my_work_order_requests'))
+                except Exception as e:
+                    # Clean up uploaded files if database operation fails
+                    print(f"Error creating work order request: {e}")
+                    if images:
+                        delete_files(images)
+                    if videos:
+                        delete_files(videos)
+                    if audio_files:
+                        delete_files(audio_files)
+                    db.session.rollback()
+                    flash(f'Error submitting report: {str(e)}', 'error')
+                    return render_template('qr_failure_report.html', equipment=equipment)
             else:
                 # ADMIN/MANAGER: Create WorkOrder directly
-                technicians = User.query.filter_by(company_id=equipment.company_id, role='technician', is_active=True).all()
-                technician_id = None
-                if technicians:
-                    tech_counts = [(tech, WorkOrder.query.filter_by(assigned_technician_id=tech.id).count()) for tech in technicians]
-                    tech_counts.sort(key=lambda x: (x[1], x[0].id))
-                    technician_id = tech_counts[0][0].id
-                work_order = WorkOrder(
-                    company_id=equipment.company_id,
-                    work_order_number=generate_work_order_number(),
-                    title=f"QR Report: {failure_type.title()} Failure - {equipment.name}",
-                    description=f"Failure reported via QR code:\n\n{description}\n\nReporter: {reporter_name or 'Anonymous'}\nPhone: {reporter_phone or 'Not provided'}",
-                    priority='urgent' if urgency == 'high' else 'high',
-                    status='open',
-                    type='corrective',
-                    equipment_id=equipment.id,
-                    assigned_technician_id=technician_id,
-                    created_by_id=current_user.id,
-                    scheduled_date=datetime.now(),
-                    due_date=datetime.now() + timedelta(hours=4) if urgency == 'high' else datetime.now() + timedelta(days=1),
-                    images=','.join(images) if images else None,
-                    videos=','.join(videos) if videos else None,
-                    voice_notes=','.join(audio_files) if audio_files else None,
-                    estimated_duration=estimated_duration
-                )
-                db.session.add(work_order)
-                if equipment.status == 'operational':
-                    equipment.status = 'maintenance'
-                    equipment.updated_at = datetime.utcnow()
-                db.session.commit()
-                flash(f'Failure report submitted successfully! Work Order #{work_order.work_order_number} has been created.', 'success')
-                return render_template('qr_failure_report_success.html', work_order=work_order, equipment=equipment)
+                try:
+                    technicians = User.query.filter_by(company_id=equipment.company_id, role='technician', is_active=True).all()
+                    technician_id = None
+                    if technicians:
+                        tech_counts = [(tech, WorkOrder.query.filter_by(assigned_technician_id=tech.id).count()) for tech in technicians]
+                        tech_counts.sort(key=lambda x: (x[1], x[0].id))
+                        technician_id = tech_counts[0][0].id
+                    work_order = WorkOrder(
+                        company_id=equipment.company_id,
+                        work_order_number=generate_work_order_number(),
+                        title=f"QR Report: {failure_type.title()} Failure - {equipment.name}",
+                        description=f"Failure reported via QR code:\n\n{description}\n\nReporter: {reporter_name or 'Anonymous'}\nPhone: {reporter_phone or 'Not provided'}",
+                        priority='urgent' if urgency == 'high' else 'high',
+                        status='open',
+                        type='corrective',
+                        equipment_id=equipment.id,
+                        assigned_technician_id=technician_id,
+                        created_by_id=current_user.id,
+                        scheduled_date=datetime.now(),
+                        due_date=datetime.now() + timedelta(hours=4) if urgency == 'high' else datetime.now() + timedelta(days=1),
+                        images=','.join(images) if images else None,
+                        videos=','.join(videos) if videos else None,
+                        voice_notes=','.join(audio_files) if audio_files else None,
+                        estimated_duration=estimated_duration
+                    )
+                    db.session.add(work_order)
+                    if equipment.status == 'operational':
+                        equipment.status = 'maintenance'
+                        equipment.updated_at = datetime.utcnow()
+                    db.session.commit()
+                    flash(f'Failure report submitted successfully! Work Order #{work_order.work_order_number} has been created.', 'success')
+                    return render_template('qr_failure_report_success.html', work_order=work_order, equipment=equipment)
+                except Exception as e:
+                    # Clean up uploaded files if database operation fails
+                    print(f"Error creating work order: {e}")
+                    if images:
+                        delete_files(images)
+                    if videos:
+                        delete_files(videos)
+                    if audio_files:
+                        delete_files(audio_files)
+                    db.session.rollback()
+                    flash(f'Error submitting report: {str(e)}', 'error')
+                    return render_template('qr_failure_report.html', equipment=equipment)
         except Exception as e:
             db.session.rollback()
             flash(f'Error submitting report: {str(e)}', 'error')
@@ -6271,8 +6497,16 @@ def init_db_command():
     db.create_all()
     click.echo('✅ Database tables created.')
 
+@click.command('cleanup-files')
+@with_appcontext
+def cleanup_files_command():
+    """Clean up orphaned files."""
+    cleanup_orphaned_files()
+    click.echo('✅ File cleanup completed!')
+
 def register_commands(app):
     app.cli.add_command(init_db_command)
+    app.cli.add_command(cleanup_files_command)
 
 register_commands(app)
 
@@ -6388,6 +6622,7 @@ def api_subdivisions(country_code):
     return jsonify(result)
 
 def delete_files(file_paths):
+    """Delete files from the filesystem"""
     if not file_paths:
         return
     if isinstance(file_paths, str):
@@ -6398,8 +6633,91 @@ def delete_files(file_paths):
             try:
                 if os.path.exists(abs_path):
                     os.remove(abs_path)
-            except Exception:
-                pass
+                    print(f"Deleted file: {abs_path}")
+            except Exception as e:
+                print(f"Error deleting file {abs_path}: {e}")
+
+def cleanup_work_order_files(work_order):
+    """Clean up all files associated with a work order"""
+    try:
+        # Clean up work order media files
+        if work_order.images:
+            delete_files(work_order.images)
+        if work_order.videos:
+            delete_files(work_order.videos)
+        if work_order.voice_notes:
+            delete_files(work_order.voice_notes)
+        
+        # Clean up comment files
+        from models import WorkOrderComment
+        comments = WorkOrderComment.query.filter_by(work_order_id=work_order.id).all()
+        for comment in comments:
+            if comment.images:
+                delete_files(comment.images)
+            if comment.videos:
+                delete_files(comment.videos)
+            if comment.voice_notes:
+                delete_files(comment.voice_notes)
+        
+        print(f"Cleaned up files for work order {work_order.id}")
+    except Exception as e:
+        print(f"Error cleaning up files for work order {work_order.id}: {e}")
+
+def cleanup_orphaned_files():
+    """Clean up orphaned files that don't have associated database records"""
+    try:
+        upload_dir = os.path.join(app.static_folder or '', 'uploads', 'work_orders')
+        if not os.path.exists(upload_dir):
+            return
+        
+        # Get all files in upload directory
+        all_files = []
+        for root, dirs, files in os.walk(upload_dir):
+            for file in files:
+                all_files.append(os.path.join(root, file))
+        
+        # Get all file paths from database
+        from models import WorkOrder, WorkOrderComment
+        db_files = set()
+        
+        # Work order files
+        work_orders = WorkOrder.query.all()
+        for wo in work_orders:
+            if wo.images:
+                db_files.update(wo.images.split(','))
+            if wo.videos:
+                db_files.update(wo.videos.split(','))
+            if wo.voice_notes:
+                db_files.update(wo.voice_notes.split(','))
+        
+        # Comment files
+        comments = WorkOrderComment.query.all()
+        for comment in comments:
+            if comment.images:
+                db_files.update(comment.images.split(','))
+            if comment.videos:
+                db_files.update(comment.videos.split(','))
+            if comment.voice_notes:
+                db_files.update(comment.voice_notes.split(','))
+        
+        # Find orphaned files
+        orphaned_files = []
+        for file_path in all_files:
+            relative_path = os.path.relpath(file_path, app.static_folder or '')
+            if relative_path not in db_files:
+                orphaned_files.append(file_path)
+        
+        # Delete orphaned files
+        for file_path in orphaned_files:
+            try:
+                os.remove(file_path)
+                print(f"Deleted orphaned file: {file_path}")
+            except Exception as e:
+                print(f"Error deleting orphaned file {file_path}: {e}")
+        
+        print(f"Cleaned up {len(orphaned_files)} orphaned files")
+    except Exception as e:
+        print(f"Error in cleanup_orphaned_files: {e}")
 
 if __name__ == '__main__':
     print(os.getenv('MAIL_USE_TLS'))

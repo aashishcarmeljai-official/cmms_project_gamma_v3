@@ -12,7 +12,9 @@ TECHNICIAN_PERMISSIONS = [
     "inventory_add",
     "workorder_view",
     "workorder_edit",
-    "user_view"
+    "user_view",
+    "sop_view",
+    "team_view"
 ]
 
 
